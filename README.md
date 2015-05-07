@@ -10,6 +10,8 @@ Banyan Collector provides a framework to launch containers from a registry, run 
 
 ## Collector Operation
 
+![Alt text](/docs/CollectorOperation.png?raw=true "Collector Operation")
+
 Figure 1. shows the overall operation of the collector. Step (0) involves Collector talking to registry (private or docker hub’s index) to obtain image hashes and repo/tags. This step is optional — a user could just specify the repositories of interest and the collector only collects data for these repos.
 
 Here are the rest of the steps:
@@ -23,11 +25,11 @@ Here are the rest of the steps:
 
 Steps 1-6 are repeated for every script. Note that all the scripts could have been executed in tandem once a container is launched. We decided against this because we wanted each script to run starting from a clean slate (e.g., didn’t want one script to affect another).
 
-[](docs/myimage.png)
-
 ## Collector Architecture
 
 The collector has been designed so that it is modular and extensible with different plugins. 
+
+![Alt text](/docs/CollectorArchitecture.png?raw=true "Collector Architecture")
 
 Figure 2. shows the overall collector architecture. At the center is the collector core that takes in inputs from various plugins, and then launches/collects data for desired containers (as described in the previous section). Here are some of the plugins where we encourage users to contribute/submit pull requests:
 * Registry: We currently support both private registry and DockerHub as the source of image location. But a given collector instance can only run on a single registry (one private registry or docker hub). However, you can run multiple instances of the collector pointing to different private registries and/or docker hub.
