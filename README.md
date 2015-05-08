@@ -17,6 +17,7 @@ Banyan Collector is a light-weight, easy to use, and modular system that allows 
 The collector can be run in one of two modes. (a) as a standalone executable (b) in a container. 
 
 (a) To run it as a standalone executable, just run the following on a Docker host (machine running docker daemon):
+
     $ sudo docker login REGISTRY
     $ go get -u banyan/collector
     $ sudo collector -localvolume=true -outdest=file REGISTRY
