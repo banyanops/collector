@@ -22,10 +22,10 @@ The collector can be run in one of two modes. (a) in a container (b) as a standa
     
 where REGISTRY is either a private registry (e.g., http://reg.myorg.com) or Docker Hub (index.docker.io). 
 
-(b) To run it as a standalone executable, you need *go* in your environment (https://golang.org/doc/install). Once go is installed, just run the following on a Docker Host:
+(b) To run it as a standalone executable, you need *go* in your environment (https://golang.org/doc/install). Once *go* is installed, just run the following on a Docker Host:
 
     $ sudo docker login REGISTRY
-    $ go get -u banyan/collector
+    $ go get -u github.com/banyanops/collector
     $ sudo collector -localvolume=true -outdest=file REGISTRY
  
 More generally, collector can be configured using several options (e.g., registry poll interval, remove images threshold, secure registry settings, etc.): 
@@ -39,9 +39,9 @@ For a list of all the options run:
 
 ## More information
 
-More details about Collector operation/architecture, etc. is availble under [docs](/docs/CollectorDetails.md).
+More details about Collector operation/architecture, etc. are availble under [docs](/docs/CollectorDetails.md).
 
-For further details about how one might use this in an enterprise please checkout www.banyanops.com. This SAAS service offers deeper analysis of your data and provides a dashboard showing which of your images are compliant to your policies (e.g., which of your images have security vulnerabilities, etc.) with real-time updates and email notifications. 
+For further details about how one might use this in an enterprise please checkout www.banyanops.com. This SAAS service offers deeper analysis of your data and provides a dashboard showing which of your images are compliant to your policies (e.g., which of your images have security vulnerabilities, etc.) along with real-time updates and email notifications. 
 
 ## License
 
