@@ -24,7 +24,7 @@ The collector can be run in one of two modes. (a) as a standalone executable (b)
  
 where REGISTRY is either a private registry (e.g., http://reg.myorg.com) or Docker Hub (index.docker.io). More generally, collector can be configured using several options (e.g., registry poll interval, remove images, secure registry, etc.): 
 
-    $ collector [options] REGISTRY [Repo...] 
+    $ sudo collector [options] REGISTRY [Repo...]
 
 For a list of all the options run:
 
