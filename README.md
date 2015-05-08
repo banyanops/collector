@@ -24,11 +24,11 @@ where REGISTRY is either a private registry (e.g., http://reg.myorg.com) or Dock
 (b) To run it as a standalone executable, you need *go* in your environment (https://golang.org/doc/install). Once *go* is installed, just run the following on a Docker Host:
 
     $ go get -u github.com/banyanops/collector
-    $ sudo collector -localvolume=true -outdest=file REGISTRY
+    $ sudo collector -localvolume=true -outdest=file REGISTRY REPO
  
 More generally, collector can be configured using several options (e.g., registry poll interval, remove images threshold, secure registry settings, etc.): 
 
-    $ sudo docker run ... banyanops/collector [options] REGISTRY [Repo...]
+    $ sudo docker run ... banyanops/collector [options] REGISTRY [REPO1 REPO2 ...]
     $ sudo collector [options] REGISTRY [REPO1 REPO2 ...]
 
 For a list of all the options run:
