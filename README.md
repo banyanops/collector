@@ -1,24 +1,50 @@
-# Banyan Collector
+# Banyan Collector: A framework to *peek* inside containers
 
-## Summary
-
-Banyan Collector provides a framework to launch containers from a registry, run arbitrary scripts inside them, and gather useful information. This framework can be used to statically analyze images for several purposes including:
-* Collect specific information from all images (e.g., packages/versions installed)
+Banyan Collector provides a system to launch containers from a registry, run arbitrary scripts inside them, and gather useful information. This framework can be used to statically analyze images for several purposes including:
+* Collect specific information from all images (e.g., packages installed)
 * Enforce policies (e.g., no unauthorized user accounts, etc.)
 * Validate invariants (e.g., nginx.conf is present in the right directory, etc.)
+* and so on...
 
+## Getting started
+
+The collector can be run in one of two modes. (a) as an standalone executable (b) in a container. 
+
+(a) To run it as a standalone executable, just run the following on a Docker host (machine running docker daemon):
+
+    $ collector <Registry>
+ 
+where registry is either a private registry (e.g., http://reg.myorg.com) or Docker Hub (?). More generally, collector can be configured using several options (e.g., registry poll interval, remove images, secure registry, etc.): 
+
+    $ collector [options] Registry [Repo...] 
+
+For a list of all the options run:
+
+    $ collector -h
+
+(b) To run the collector in a container:
+
+    $ docker run -d \
+    -v $(which docker):/usr/bin/docker \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v $HOME/.dockercfg:/root/.dockercfg \
+    banyanops/collector {{REGISTRY}}
+
+## License
+
+Banyan Collector is distributed under Apache 2.0 License. More details in [LICENSE](/LICENSE).
 
 ## Collector Operation
 
 ![Alt text](/docs/CollectorOperation.png?raw=true "Collector Operation")
 
-Figure 1. shows the overall operation of the collector. Step (0) involves Collector talking to registry (private or docker hub’s index) to obtain image hashes and repo/tags. This step is optional — a user could just specify the repositories of interest and the collector only collects data for these repos.
+The figure above shows the overall operation of the collector. Step (0) involves Collector talking to registry (private or docker hub’s index) to obtain image hashes and repo/tags. This step is optional — a user could just specify the repositories of interest and the collector only collects data for these repos.
 
 Here are the rest of the steps:
 
-1. Collector talks to the Docker Daemon on it’s local Docker Host and places a “pull” request for repo/tags of interest
-2. Docker daemon passes on the pull request to docker registry which brings all the layers comprising the image into the Docker Host
-3. Collector now issues a “run” request for the containers to be inspected. We currently only support running one container at a time to ensure that our system doesn’t use up too many resources, but we can easily extend it to run multiple of them simultaneously. The request also contains volumes to mount from the collector container that contains statically-linked tools (e.g., bash-static, python-static, etc.) and the directories where scripts are located. We also specify a special entrypoint so that we override any CMDs/entrypoint from the original container.
+1. Collector talks to the Docker Daemon on it’s local Docker Host and places a docker *pull* request for repo/tags of interest
+2. Docker daemon passes on the *pull* request to docker registry which brings all the layers comprising the image into the Docker Host
+3. Collector now issues a docker *run* request for the containers to be inspected. We currently only support running one container at a time to ensure that our system doesn’t use up too many resources, but we can easily extend it to run multiple of them simultaneously. The request also contains volumes to mount from the collector container that contains statically-linked tools (e.g., bash-static, python-static, etc.) and the directories where scripts are located. We also specify a special entrypoint so that we override any CMDs/entrypoint from the original container.
 4. Docker Daemon launches the containers to be inspected. All containers run a script (e.g., banyan or user-specified script) and produces output on stdout.
 5. The containers output is collated by the collector.
 6. The final output can be sent to Banyan Analyzer for further analysis, or just stored in the local file-system against which additional scripts can be run. 
@@ -31,7 +57,7 @@ The collector has been designed so that it is modular and extensible with differ
 
 ![Alt text](/docs/CollectorArchitecture.png?raw=true "Collector Architecture")
 
-Figure 2. shows the overall collector architecture. At the center is the collector core that takes in inputs from various plugins, and then launches/collects data for desired containers (as described in the previous section). Here are some of the plugins where we encourage users to contribute/submit pull requests:
+The figure above shows the overall collector architecture. At the center is the collector core that takes in inputs from various plugins, and then launches/collects data for desired containers (as described in the previous section). Here are some of the plugins where we encourage users to contribute/submit pull requests:
 * Registry: We currently support both private registry and DockerHub as the source of image location. But a given collector instance can only run on a single registry (one private registry or docker hub). However, you can run multiple instances of the collector pointing to different private registries and/or docker hub.
   * Possible extensions: multiple registry support, images in the local filesystem (e.g., not uploaded to registry)
 * User-specified scripts: We support multiple types of plugins to write scripts for data collection including Bash and Python. We provide statically linked versions of bash and python, and busybox commands by exploring volumes into the containers to be inspected. That way, we don’t rely on any pre-existing tools inside the container to run scripts. We’ve also provided two sample bash scripts: PkgExtract and PkgDeps that collect package information and dependencies between different packages.
