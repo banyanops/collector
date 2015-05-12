@@ -37,11 +37,21 @@ For a list of all the options run:
 
     $ collector -h
 
+## Tests
+    
+The go tests rely on write access to the Docker UNIX socket /var/run/docker.sock. One approach is to add the user to the "docker" group to enable write access to the socket. Alternatively, the tests can be run as "root", for example using "sudo", but this requires the root user to share the Go development environment ($GOPATH, etc.).
+
+Another requirement to run the tests is to set environment variables $DOCKER_USER and $DOCKER_PASSWORD to the user's Docker Hub login credentials. Additionally, the tests emit a warning if $COLLECTOR_DIR is not set (but the warning can be safely ignored).
+
+Once the environment has been correctly setup, go tests can be run using the standard command:
+
+    $ go test
+
 ## More information
 
 More details about Collector operation/architecture, etc. are available under [docs](/docs/CollectorDetails.md).
 
-For further details about how one might use this in an enterprise, please checkout www.banyanops.com. This SAAS service offers deeper analysis of your data and provides a dashboard showing which of your images are compliant to your policies (e.g., which of your images have security vulnerabilities, etc.) along with real-time updates and email notifications. 
+For further details about how one might use this in an enterprise, please check out www.banyanops.com. This SAAS service offers deeper analysis of your data and provides a dashboard showing which of your images are compliant to your policies (e.g., which of your images have security vulnerabilities, etc.) along with real-time updates and email notifications. 
 
 ## License
 
