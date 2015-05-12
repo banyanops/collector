@@ -13,18 +13,20 @@ The collector can be run in one of two modes. (a) in a container (b) as a standa
 (a) To run the collector in a container, just pull it from Docker Hub and run it:
 
     $ sudo docker pull banyanops/collector
-    $ sudo docker run -d \
-    -v $(which docker):/usr/bin/docker \
+    $ sudo docker run --rm \
+    -v ~/.dockercfg:/root/.dockercfg \
     -v /var/run/docker.sock:/var/run/docker.sock \
-    -v $HOME/.dockercfg:/root/.dockercfg \
-    banyanops/collector REGISTRY REPO
+    -v $HOME/.banyan:/banyandir \
+    -v <USER_SCRIPTS_DIR>:/banyancollector/data/userscripts \
+    -e BANYAN_HOST_DIR=$HOME/.banyan \
+    banyanops/collector <REGISTRY> <REPO>
     
 where REGISTRY is either a private registry (e.g., http://reg.myorg.com) or Docker Hub (index.docker.io), and REPO is a repository for which you'd like to collect data. For a private registry (with search enabled), if no REPO is specified, data is collected from all the repositories.
 
 (b) To run it as a standalone executable, you need *go* in your environment (https://golang.org/doc/install). Once *go* is installed, just run the following on a Docker Host:
 
     $ go get -u github.com/banyanops/collector
-    $ sudo collector -localvolume=true -outdest=file REGISTRY REPO
+    $ cd <COLLECTOR_SOURCE_DIR>; sudo COLLECTOR_DIR=$PWD $GOPATH/bin/collector <REGISTRY> <REPO>
  
 More generally, collector can be configured using several options (e.g., registry poll interval, remove images threshold, secure registry settings, etc.): 
 
@@ -37,9 +39,9 @@ For a list of all the options run:
 
 ## More information
 
-More details about Collector operation/architecture, etc. are availble under [docs](/docs/CollectorDetails.md).
+More details about Collector operation/architecture, etc. are available under [docs](/docs/CollectorDetails.md).
 
-For further details about how one might use this in an enterprise please checkout www.banyanops.com. This SAAS service offers deeper analysis of your data and provides a dashboard showing which of your images are compliant to your policies (e.g., which of your images have security vulnerabilities, etc.) along with real-time updates and email notifications. 
+For further details about how one might use this in an enterprise, please checkout www.banyanops.com. This SAAS service offers deeper analysis of your data and provides a dashboard showing which of your images are compliant to your policies (e.g., which of your images have security vulnerabilities, etc.) along with real-time updates and email notifications. 
 
 ## License
 
