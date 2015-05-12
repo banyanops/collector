@@ -51,7 +51,7 @@ Once the environment has been correctly setup, go tests can be run using the sta
 
 More details about Collector operation/architecture, etc. are available under [docs](/docs/CollectorDetails.md).
 
-For further details about how one might use this in an enterprise, please checkout www.banyanops.com. This SAAS service offers deeper analysis of your data and provides a dashboard showing which of your images are compliant to your policies (e.g., which of your images have security vulnerabilities, etc.) along with real-time updates and email notifications. 
+For further details about how one might use this in an enterprise, please check out www.banyanops.com. This SAAS service offers deeper analysis of your data and provides a dashboard showing which of your images are compliant to your policies (e.g., which of your images have security vulnerabilities, etc.) along with real-time updates and email notifications. 
 
 ## License
 
