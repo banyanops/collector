@@ -31,8 +31,6 @@ For a list of all the options run:
 
 ## Why not just use shell scripts?
 
-* easy to maintain, extensible, portable
-
 Shell scripts are great for quickly getting specific information from images. However, as we add more complexity, it becomes hard to write scripts that are easy to maintain, quickly extensible and portable to different environments.
 
 For example, the complexity in managing registry connections, keeping track of repo/tag changes, cleaning up stale images, supporting arbitrary policies, etc. is too much to handle using simple scripts. Furthermore, packaging the collector in a container provides a portable framework that is not dependent on any particular host configuration, and can seamlessly run anywhere.
