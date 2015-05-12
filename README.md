@@ -19,7 +19,7 @@ The collector can be run in one of two modes: (a) as a standalone executable (b)
 
 where REGISTRY is either a private registry (e.g., http://reg.myorg.com) or Docker Hub (index.docker.io), and REPO is a repository for which you'd like to collect data. For a private registry (with search enabled), if no REPO is specified, data is collected from all the repositories.
 
-(b) To run the collector in a container, please follow instructions on [Docker Hub](https://registry.hub.docker.com/u/banyanops/collector/)
+(b) To run the collector in a container, please follow instructions on [Docker Hub](https://registry.hub.docker.com/u/banyanops/collector/).
 
 More generally, collector can be configured using several options (e.g., registry poll interval, remove images threshold, secure registry settings, etc.): 
 
