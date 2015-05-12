@@ -1,5 +1,7 @@
 # Banyan Collector: A framework to *peek* inside containers
 
+Have you wondered what your container images really contain? If they have the very packages that are susceptible to all kinds of attacks? Or, if they have the configuration you expect when they are run? Banyan Collector provides a powerful, extensible framework to answer all these questions and more.
+
 Banyan Collector is a light-weight, easy to use, and modular system that allows you to launch containers from a registry, run arbitrary scripts inside them, and gather useful information. This framework can be used to statically analyze images for several purposes including:
 * Collect specific information from all images (e.g., packages installed)
 * Enforce policies (e.g., no unauthorized user accounts, etc.)
