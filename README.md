@@ -45,6 +45,10 @@ More details about Collector operation/architecture, etc. are available under [d
 
 For further details about how one might use this in an enterprise, please check out [Banyan](http://www.banyanops.com). This SAAS service offers deeper analysis of your data and provides a dashboard showing which of your images are compliant to your policies (e.g., which of your images have security vulnerabilities, etc.) along with real-time updates and email notifications. 
 
+## Get involved
+
+Collector is under active development. Fork the project and submit pull requests, or file issues or tweet us [@banyanops](https://twitter.com/banyanops).
+
 ## License
 
 Banyan Collector is distributed under Apache 2.0 License. More details in [LICENSE](/LICENSE).
