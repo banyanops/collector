@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bitbucket.org/banyanops/mysqllib"
 	_ "bytes"
 	"fmt"
 	_ "io/ioutil"
@@ -9,7 +8,7 @@ import (
 	"testing"
 )
 
-var imi []mysqllib.ImageMetadataInfo
+var imi []ImageMetadataInfo
 var tagSlice []TagInfo
 
 func TestMain(m *testing.M) {
