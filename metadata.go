@@ -258,10 +258,12 @@ func getReposHub() (hubInfo []HubInfo, err error) {
 		req.Header.Set("X-Docker-Token", "true")
 		r, e := client.Do(req)
 		if e != nil {
+			blog.Error(e, ":getReposHub HTTP request failed")
 			return
 		}
 		defer r.Body.Close()
 		if r.StatusCode != 200 {
+			blog.Error("getReposHub HTTP bad status code %d from Docker Hub", r.StatusCode)
 			return
 		}
 		dockerToken = r.Header.Get("X-Docker-Token")
