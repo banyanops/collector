@@ -145,7 +145,6 @@ func getAuthConfig(user, password, auth, email, registry string) (authConfig str
 	if err != nil {
 		blog.Exit("Failed to marshal authconfig")
 	}
-	blog.Info(string(jsonString))
 	dst := make([]byte, base64.URLEncoding.EncodedLen(len(jsonString)))
 	base64.URLEncoding.Encode(dst, jsonString)
 	authConfig = string(dst)

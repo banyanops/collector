@@ -58,7 +58,7 @@ func TestPostDockerAPI(t *testing.T) {
 		t.Fatal(e)
 	}
 	apipath := "/containers/create"
-	jsonString := []byte(`{ "Hostname": "", "User": "0", "AttachStdin": false, "AttachStdout": true, "AttachStderr": true, "Tty": false, "Env": null, "Cmd": [ "-c", "PATH=/banyancollector:$PATH /banyancollector/pkgextractscript.sh" ], "Entrypoint": [ "/banyancollector/bash-static" ], "Image": "ubuntu", "WorkingDir": "", "HostConfig": { "Binds": [ "/home/yoshiotu/gospace/src/bitbucket.org/banyanops/collector/docker/data:/banyancollector:ro" ], "Links": null, "Privileged": false, "VolumesFrom": null } }`)
+	jsonString := []byte(`{ "Hostname": "", "User": "0", "AttachStdin": false, "AttachStdout": true, "AttachStderr": true, "Tty": false, "Env": null, "Cmd": [ "-c", "PATH=/banyancollector:$PATH /banyancollector/pkgextractscript.sh" ], "Entrypoint": [ "/banyancollector/bash-static" ], "Image": "ubuntu", "WorkingDir": "", "HostConfig": { "Binds": [ "/home/yoshiotu/gospace/src/github.com/banyanops/collector/docker/data:/banyancollector:ro" ], "Links": null, "Privileged": false, "VolumesFrom": null } }`)
 	resp, err := doDockerAPI(tr, "POST", apipath, jsonString, "")
 	if err != nil {
 		t.Fatal(err)
