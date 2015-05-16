@@ -1,9 +1,7 @@
 package main
 
 import (
-	_ "bytes"
 	"fmt"
-	_ "io/ioutil"
 	"os"
 	"testing"
 )
