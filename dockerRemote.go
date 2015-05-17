@@ -2,14 +2,17 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"net"
 	"net/http"
-	_ "os"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	blog "github.com/ccpaging/log4go"
@@ -18,6 +21,9 @@ import (
 var (
 	// DockerTransport points to the http transport used to connect to the docker unix socket
 	DockerTransport *http.Transport
+	DockerTLSVerify = true
+	DockerProto     = "unix"
+	DockerAddr      = DUMMYDOMAIN
 )
 
 const (
@@ -50,27 +56,81 @@ type Container struct {
 	HostConfig   HostConfig
 }
 
-// NewDockerTransport creates an HTTP transport to the Docker unix/tcp socket.
-// TODO: Extend to support TLS connections to the Docker daemon.
-func NewDockerTransport(proto, addr string) (tr *http.Transport, e error) {
-	// create transport for unix socket
-	if proto != "unix" && proto != "tcp" {
-		e = errors.New("Protocol " + proto + " is not yet supported")
+func NewTLSTransport(hostpath string, certfile, cafile, keyfile string) (transport *http.Transport, err error) {
+	cert, err := tls.LoadX509KeyPair(certfile, keyfile)
+	if err != nil {
 		return
 	}
-	if proto == "unix" {
+
+	caCert, err := ioutil.ReadFile(cafile)
+	if err != nil {
+		return
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      caCertPool,
+	}
+	tlsConfig.BuildNameToCertificate()
+	transport = &http.Transport{TLSClientConfig: tlsConfig}
+	return
+}
+
+// NewDockerTransport creates an HTTP transport to the Docker unix/tcp socket.
+func NewDockerTransport(proto, addr string) (tr *http.Transport, e error) {
+	// check Docker environment variables
+	dockerHost := os.Getenv("DOCKER_HOST")
+	if os.Getenv("DOCKER_TLS_VERIFY") == "0" {
+		DockerTLSVerify = false
+	}
+	dockerCertPath := os.Getenv("DOCKER_CERT_PATH")
+	if dockerHost == "" {
+		DockerProto = proto
+		DockerAddr = addr
+	} else {
+		blog.Info("$DOCKER_HOST env var = %s", dockerHost)
+		switch {
+		case strings.HasPrefix(dockerHost, "tcp://"):
+			blog.Info("Using protocol tcp")
+			DockerProto = "tcp"
+			DockerAddr = dockerHost[6:]
+		case strings.HasPrefix(dockerHost, "unix://"):
+			blog.Info("Using protocol unix")
+			DockerProto = "unix"
+			DockerAddr = dockerHost[6:]
+		default:
+			blog.Exit("Unexpected value in $DOCKER_HOST:", dockerHost)
+		}
+	}
+
+	// create transport for unix socket
+	if DockerProto != "unix" && DockerProto != "tcp" {
+		e = errors.New("Protocol " + DockerProto + " is not yet supported")
+		return
+	}
+	if DockerProto == "unix" {
 		tr = &http.Transport{}
 		tr.DisableCompression = true
 		tr.Dial = func(_, _ string) (net.Conn, error) {
-			return net.DialTimeout(proto, addr, HTTPTIMEOUT)
+			return net.DialTimeout(DockerProto, DockerAddr, HTTPTIMEOUT)
 		}
 		return
 	}
-	if proto == "tcp" {
-		tr = &http.Transport{}
+	if DockerTLSVerify {
+		certfile := dockerCertPath + "/cert.pem"
+		cafile := dockerCertPath + "/ca.pem"
+		keyfile := dockerCertPath + "/key.pem"
+		tr, e = NewTLSTransport(DockerAddr, certfile, cafile, keyfile)
+		if e != nil {
+			blog.Exit(e, "NewTLSTransport")
+		}
 		return
 	}
-	panic("Unreachable")
+
+	tr = &http.Transport{}
+	return
 }
 
 // doDockerAPI performs an HTTP GET,POST,DELETE operation to the Docker daemon.
@@ -85,12 +145,16 @@ func doDockerAPI(tr *http.Transport, operation, apipath string, jsonString []byt
 	}
 	// for unix socket, URL (host.domain) is needed but can be anything
 	var host string
-	if *dockerProto == "unix" {
+	HTTP := "http://"
+	if DockerProto == "unix" {
 		host = DUMMYDOMAIN
 	} else {
-		host = *dockerAddr
+		host = DockerAddr
+		if DockerTLSVerify {
+			HTTP = "https://"
+		}
 	}
-	URL := "http://" + host + apipath
+	URL := HTTP + host + apipath
 	blog.Debug("doDockerAPI %s", URL)
 	req, e := http.NewRequest(operation, URL, bytes.NewBuffer(jsonString))
 	if e != nil {
@@ -131,7 +195,7 @@ func createCmd(imageID ImageIDType, scriptName, staticBinary, dirPath string) (j
 	container.AttachStderr = true
 	container.HostConfig.Binds = []string{BANYANHOSTDIR() + "/hosttarget" + ":" + TARGETCONTAINERDIR + ":ro"}
 	container.Image = string(imageID)
-	
+
 	container.Entrypoint = []string{TARGETCONTAINERDIR + "/bin/bash-static", "-c"}
 	container.Cmd = []string{"PATH=" + TARGETCONTAINERDIR + "/bin" + ":$PATH " + staticBinary + " " + dirPath + "/" + scriptName}
 	blog.Info("Executing command: docker %v", container.Cmd)
