@@ -491,8 +491,8 @@ func lookupMetadataHub(repo RepoType, tag TagType, imageID ImageIDType, hubInfo 
 }
 
 // getNewImageMetadata takes the set of existing images, queries the registry to find any changes,
-// and then brings the Banyan service up to date by telling it to delete obsolete metadata
-// and to add new metadata.
+// and then brings the Output Writer up to date by telling it the obsolete metadata to delete
+// and the new metadata to add.
 func getNewImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo,
 	imi []ImageMetadataInfo, currentImiSet ImiSet) {
 

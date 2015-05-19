@@ -62,7 +62,8 @@ var (
 	// Configuration parameters for speed/efficiency
 	removeThresh = flag.Int([]string{"-removethresh"}, 10,
 		"Number of images that get pulled before removal")
-	poll = flag.Int64([]string{"p", "-poll"}, 60, "Polling interval in seconds")
+	maxImages = flag.Int([]string{"-maximages"}, 0, "Maximum number of new images to process per repository (0=unlimited)")
+	poll      = flag.Int64([]string{"p", "-poll"}, 60, "Polling interval in seconds")
 
 	// Docker remote API related parameters
 	dockerProto = flag.String([]string{"-dockerproto"}, "unix",
@@ -111,54 +112,65 @@ func DoIteration(authToken string, processedImages ImageSet, oldImiSet ImiSet,
 	blog.Debug("DoIteration: processedImages is %v", processedImages)
 	PulledNew = PulledList
 	_ /*tagSlice*/, imi, currentImiSet := getNewImageMetadata(oldImiSet)
-	imageToMDMap := getImageToMDMap(imi)
-	if len(imi) > 0 {
-		SaveImageMetadata(imi)
 
-		for {
-			pulledImages := NewImageSet()
-			for _, metadata := range imi {
-				if filterRepos && !reposToProcess[RepoType(metadata.Repo)] {
-					continue
-				}
-				if excludeRepo[RepoType(metadata.Repo)] {
-					continue
-				}
-				if pulledImages[ImageIDType(metadata.Image)] {
-					continue
-				}
-				if processedImages[ImageIDType(metadata.Image)] {
-					continue
-				}
-				// docker pull image
-				PullImage(metadata)
-				PulledNew = append(PulledNew, metadata)
-				if *removeThresh > 0 && len(PulledNew) > *removeThresh {
-					RemoveImages(PulledNew[0:*removeThresh], imageToMDMap)
-					PulledNew = PulledNew[*removeThresh:]
-				}
-				pulledImages[ImageIDType(metadata.Image)] = true
-				if len(pulledImages) == IMAGEBATCH {
-					break
-				}
+	if len(imi) == 0 {
+		blog.Info("Nothing new in this iteration")
+		return
+	}
+	SaveImageMetadata(imi)
+
+	// number of images processed for each repository in this iteration
+	imageCount := make(map[RepoType]int)
+	imageToMDMap := getImageToMDMap(imi)
+
+	for {
+		pulledImages := NewImageSet()
+		for _, metadata := range imi {
+			if filterRepos && !reposToProcess[RepoType(metadata.Repo)] {
+				continue
 			}
-			if len(pulledImages) > 0 {
-				// get and save image data for all the images in pulledimages
-				// TODO: parse if other outputs are obtained from scripts
-				outMapMap := GetImageAllData(pulledImages)
-				SaveImageAllData(outMapMap)
-				for imageID := range pulledImages {
-					processedImages[imageID] = true
-				}
-				if e := persistImageList(pulledImages); e != nil {
-					blog.Error(e, "Failed to persist list of collected images")
-				}
-			} else {
+			if excludeRepo[RepoType(metadata.Repo)] {
+				continue
+			}
+			if pulledImages[ImageIDType(metadata.Image)] {
+				continue
+			}
+			if *maxImages > 0 && imageCount[RepoType(metadata.Repo)] >= *maxImages {
+				blog.Info("Max image count %d reached for %s, skipping :%s",
+					*maxImages, metadata.Repo, metadata.Tag)
+				continue
+			}
+			imageCount[RepoType(metadata.Repo)]++
+			if processedImages[ImageIDType(metadata.Image)] {
+				continue
+			}
+
+			// docker pull image
+			PullImage(metadata)
+			PulledNew = append(PulledNew, metadata)
+			if *removeThresh > 0 && len(PulledNew) > *removeThresh {
+				RemoveImages(PulledNew[0:*removeThresh], imageToMDMap)
+				PulledNew = PulledNew[*removeThresh:]
+			}
+			pulledImages[ImageIDType(metadata.Image)] = true
+			if len(pulledImages) == IMAGEBATCH {
 				break
 			}
 		}
-	} else {
-		blog.Info("Nothing new in this iteration")
+
+		if len(pulledImages) == 0 {
+			break
+		}
+		// get and save image data for all the images in pulledimages
+		// TODO: parse if other outputs are obtained from scripts
+		outMapMap := GetImageAllData(pulledImages)
+		SaveImageAllData(outMapMap)
+		for imageID := range pulledImages {
+			processedImages[imageID] = true
+		}
+		if e := persistImageList(pulledImages); e != nil {
+			blog.Error(e, "Failed to persist list of collected images")
+		}
 	}
 	return
 }
@@ -345,7 +357,7 @@ func main() {
 
 	copyBanyanData()
 
-	// setup connection to docker unix socket
+	// setup connection to docker daemon's unix/tcp socket
 	var e error
 	DockerTransport, e = NewDockerTransport(*dockerProto, *dockerAddr)
 	if e != nil {
