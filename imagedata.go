@@ -1,6 +1,6 @@
-// Functions that deal with the contents of images. Currently this means Linux distribution
+// imagedata.go has funcitons that deal with the contents of images, including Linux distribution
 // identification and application package names, versions, and architectures.
-package main
+package collector
 
 import (
 	"io/ioutil"
@@ -24,15 +24,15 @@ type ImageDataInfo struct {
 // TODO: Detect if the pulled image has a different imageID than the value retrieved from
 // metadata, and if so correct the metadata, or at least skip processing the image.
 func PullImage(metadata ImageMetadataInfo) {
-	tagspec := registryspec + "/" + metadata.Repo + ":" + metadata.Tag
+	tagspec := RegistrySpec + "/" + metadata.Repo + ":" + metadata.Tag
 	apipath := "/images/create?fromImage=" + tagspec
 	blog.Info("PullImages downloading %s, Image ID: %s", apipath, metadata.Image)
 	resp, err := doDockerAPI(DockerTransport, "POST", apipath, []byte{}, XRegistryAuth)
 	if err != nil {
-		blog.Error(err, "PullImages failed for", registryspec, metadata.Repo, metadata.Tag, metadata.Image)
+		blog.Error(err, "PullImages failed for", RegistrySpec, metadata.Repo, metadata.Tag, metadata.Image)
 	}
 	if strings.Contains(string(resp), `"error":`) {
-		blog.Error("PullImages error for %s/%s/%s", registryspec, metadata.Repo, metadata.Tag)
+		blog.Error("PullImages error for %s/%s/%s", RegistrySpec, metadata.Repo, metadata.Tag)
 	}
 	blog.Trace(string(resp))
 	return
@@ -44,13 +44,13 @@ func RemoveImages(PulledImages []ImageMetadataInfo, imageToMDMap map[string][]Im
 	for _, imageMD := range PulledImages {
 		// Get all metadata (repo/tags) associated with that image
 		for _, metadata := range imageToMDMap[imageMD.Image] {
-			// basespec := registryspec + "/" + string(t.Repo) + ":"
-			if excludeRepo[RepoType(metadata.Repo)] {
+			// basespec := RegistrySpec + "/" + string(t.Repo) + ":"
+			if ExcludeRepo[RepoType(metadata.Repo)] {
 				continue
 			}
-			blog.Debug("Removing the following registry/repo:tag: " + registryspec + "/" +
+			blog.Debug("Removing the following registry/repo:tag: " + RegistrySpec + "/" +
 				metadata.Repo + ":" + metadata.Tag)
-			apipath := "/images/" + registryspec + "/" + metadata.Repo + ":" + metadata.Tag
+			apipath := "/images/" + RegistrySpec + "/" + metadata.Repo + ":" + metadata.Tag
 			blog.Info("RemoveImages %s", apipath)
 			_, err := doDockerAPI(DockerTransport, "DELETE", apipath, []byte{}, "")
 			if err != nil {
@@ -97,7 +97,7 @@ func GetImageAllData(pulledImages ImageSet) (outMapMap map[string]map[string]int
 
 // SaveImageAllData saves output of all the scripts.
 func SaveImageAllData(outMapMap map[string]map[string]interface{} /*, dotfiles []DotFilesType*/) {
-	for _, writer := range writerList {
+	for _, writer := range WriterList {
 		writer.WriteImageAllData(outMapMap)
 	}
 

@@ -1,4 +1,4 @@
-package main
+package collector
 
 import (
 	"encoding/json"
@@ -37,7 +37,7 @@ func (f *FileWriter) WriteImageAllData(outMapMap map[string]map[string]interface
 	for imageID, scriptMap := range outMapMap {
 		for scriptName, out := range scriptMap {
 			scriptDir := f.dir + "/" + trimExtension(scriptName)
-			err := createDirIfNotExist(scriptDir)
+			err := CreateDirIfNotExist(scriptDir)
 			if err != nil {
 				blog.Error(err, ": Error creating script dir: ", scriptDir)
 				continue
@@ -84,7 +84,7 @@ func (f *FileWriter) handleImageMetadata(imageMetadata []ImageMetadataInfo, acti
 	}
 
 	// If output directory does not exist, first create it
-	createDirIfNotExist(f.dir)
+	CreateDirIfNotExist(f.dir)
 	filenamePath := f.dir + "/" + "metadata"
 
 	data := ImageMetadataAndAction{action, imageMetadata}

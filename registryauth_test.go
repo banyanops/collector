@@ -1,5 +1,5 @@
 // Testing for registry authentication.
-package main
+package collector
 
 import (
 	"fmt"

@@ -1,5 +1,5 @@
-// Functions in this file invoke Docker registry authentication and Docker Hub authentication and indexing.
-package main
+// registryauth.go has functions for Docker registry authentication and Docker Hub authentication and indexing.
+package collector
 
 import (
 	"encoding/base64"
@@ -20,9 +20,9 @@ var (
 	AuthRegistry = flag.Bool([]string{"-registryauth"}, true,
 		"Set to false if registry does not need authentication")
 	// registryspec is the host.domainname of the registry
-	registryspec string
+	RegistrySpec string
 	// registryAPIURL is the http(s)://[user:password@]host.domainname of the registry
-	registryAPIURL string
+	RegistryAPIURL string
 	// XRegistryAuth is the base64-encoded AuthConfig object (for X-Registry-Auth HTTP request header)
 	XRegistryAuth string
 )
@@ -34,18 +34,18 @@ type DockerAuth struct {
 	Email string
 }
 
-// getRegistryURL determines the full URL, with or without HTTP Basic Auth, needed to
+// GetRegistryURL determines the full URL, with or without HTTP Basic Auth, needed to
 // access the registry or Docker Hub.
-func getRegistryURL() (URL string, hubAPI bool, XRegistryAuth string) {
-	user, password, fullRegistry, XRegistryAuth := RegAuth(registryspec)
+func GetRegistryURL() (URL string, hubAPI bool, XRegistryAuth string) {
+	user, password, fullRegistry, XRegistryAuth := RegAuth(RegistrySpec)
 	if *AuthRegistry == true && user == "" {
 		blog.Exit("Registry auth could not be determined from $HOME/.dockercfg")
 	}
 	if *HTTPSRegistry == false {
 		if user != "" {
-			URL = "http://" + user + ":" + password + "@" + registryspec
+			URL = "http://" + user + ":" + password + "@" + RegistrySpec
 		} else {
-			URL = "http://" + registryspec
+			URL = "http://" + RegistrySpec
 		}
 	} else {
 		// HTTPS is required
@@ -57,9 +57,9 @@ func getRegistryURL() (URL string, hubAPI bool, XRegistryAuth string) {
 			}
 		} else {
 			if user != "" {
-				URL = "https://" + user + ":" + password + "@" + registryspec
+				URL = "https://" + user + ":" + password + "@" + RegistrySpec
 			} else {
-				URL = "https://" + registryspec
+				URL = "https://" + RegistrySpec
 			}
 		}
 		if strings.Contains(URL, "docker.io") {

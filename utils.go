@@ -1,12 +1,12 @@
-package main
+package collector
 
 import (
 	"errors"
-	"os/exec"
-	"os"
 	"io/ioutil"
+	"os"
+	"os/exec"
 	"path/filepath"
-	
+
 	blog "github.com/ccpaging/log4go"
 )
 
@@ -31,7 +31,7 @@ func dirExists(dir string) (bool, error) {
 	return true, nil
 }
 
-func createDirIfNotExist(dir string) (err error) {
+func CreateDirIfNotExist(dir string) (err error) {
 	exists, err := dirExists(dir)
 	if err != nil {
 		blog.Error(err, ": Error while querying dir: ", dir)
@@ -64,7 +64,7 @@ func copy(src, dest string) {
 }
 
 // copyDir copies all files from srcDir to destDir
-func copyDir(srcDir, destDir string) {
+func CopyDir(srcDir, destDir string) {
 	existsSrc, err1 := dirExists(srcDir)
 	existsDest, err2 := dirExists(destDir)
 	if err1 != nil || err2 != nil {
@@ -87,8 +87,8 @@ func copyDir(srcDir, destDir string) {
 
 }
 
-// copyDirRecursive copies all files from srcDir to destDir
-func copyDirTree(srcDir, destDir string) {
+// CopyDirTree copies all files from srcDir to destDir
+func CopyDirTree(srcDir, destDir string) {
 	srcs, err := filepath.Glob(srcDir)
 	if err != nil {
 		blog.Exit(err, ": Error in generating matches for", srcDir)
@@ -98,6 +98,6 @@ func copyDirTree(srcDir, destDir string) {
 	cpCmd := exec.Command("cp", dirs...)
 	err = cpCmd.Run()
 	if err != nil {
-		blog.Exit(err, ": Error in copying", srcDir, " to ", destDir) 
+		blog.Exit(err, ": Error in copying", srcDir, " to ", destDir)
 	}
 }

@@ -1,20 +1,21 @@
-package main
+package collector
 
 import (
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"strings"
 
+	config "github.com/banyanops/collector/config"
 	blog "github.com/ccpaging/log4go"
 	flag "github.com/docker/docker/pkg/mflag"
 )
 
 var (
-	//userScriptsDir    = flag.String([]string{"userscriptsdir"}, BANYANDIR()+"/hosttarget/userscripts", "Directory with all user-specified scripts")
-	userScriptStore   = flag.String([]string{"u", "-userscriptstore"}, COLLECTORDIR()+"/data/userscripts", "Directory with all user-specified scripts")
-	userScriptsDir    = BANYANDIR() + "/hosttarget/userscripts"
-	defaultScriptsDir = BANYANDIR() + "/hosttarget/defaultscripts"
-	binDir            = BANYANDIR() + "/hosttarget/bin"
+	//userScriptsDir    = flag.String([]string{"userscriptsdir"}, config.BANYANDIR()+"/hosttarget/userscripts", "Directory with all user-specified scripts")
+	UserScriptStore   = flag.String([]string{"u", "-userscriptstore"}, config.COLLECTORDIR()+"/data/userscripts", "Directory with all user-specified scripts")
+	UserScriptsDir    = config.BANYANDIR() + "/hosttarget/userscripts"
+	DefaultScriptsDir = config.BANYANDIR() + "/hosttarget/defaultscripts"
+	BinDir            = config.BANYANDIR() + "/hosttarget/bin"
 )
 
 const (
@@ -64,10 +65,10 @@ func getScripts(dirPath string) (scripts []Script, err error) {
 		var script Script
 		switch {
 		case strings.HasSuffix(file.Name(), ".sh"):
-			blog.Debug("dirpath: " + dirPath + " after removing prefix: " + BANYANDIR() + " looks like: " + strings.TrimPrefix(dirPath, BANYANDIR()+"/hosttarget"))
-			script = newBashScript(file.Name(), TARGETCONTAINERDIR+strings.TrimPrefix(dirPath, BANYANDIR()+"/hosttarget"), []string{""})
+			blog.Debug("dirpath: " + dirPath + " after removing prefix: " + config.BANYANDIR() + " looks like: " + strings.TrimPrefix(dirPath, config.BANYANDIR()+"/hosttarget"))
+			script = newBashScript(file.Name(), TARGETCONTAINERDIR+strings.TrimPrefix(dirPath, config.BANYANDIR()+"/hosttarget"), []string{""})
 		case strings.HasSuffix(file.Name(), ".py"):
-			script = newPythonScript(file.Name(), TARGETCONTAINERDIR+strings.TrimPrefix(dirPath, BANYANDIR()+"/hosttarget"), []string{""})
+			script = newPythonScript(file.Name(), TARGETCONTAINERDIR+strings.TrimPrefix(dirPath, config.BANYANDIR()+"/hosttarget"), []string{""})
 		default:
 			blog.Warn("Unknown script file type for: " + file.Name())
 			//Ignore this file...
@@ -81,13 +82,13 @@ func getScripts(dirPath string) (scripts []Script, err error) {
 
 func getScriptsToRun() (scripts []Script) {
 	// get default scripts
-	defaultScripts, err := getScripts(defaultScriptsDir)
+	defaultScripts, err := getScripts(DefaultScriptsDir)
 	if err != nil {
 		blog.Exit(err, ": Error in getting default scripts")
 	}
 
 	// get user-specified scripts
-	userScripts, err := getScripts(userScriptsDir)
+	userScripts, err := getScripts(UserScriptsDir)
 	if err != nil {
 		blog.Warn(err, ": Error in getting user-specified scripts")
 	}

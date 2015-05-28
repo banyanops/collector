@@ -14,7 +14,7 @@ The collector can be run in one of two modes: (a) as a standalone executable (b)
 
 (a) To run it as a standalone executable, you need *go* in your environment (https://golang.org/doc/install). Once *go* is installed, just run the following on a Docker Host:
 
-    $ go get -u github.com/banyanops/collector
+    $ go get -u github.com/banyanops/collector/...
     $ cd <COLLECTOR_SOURCE_DIR>; sudo COLLECTOR_DIR=$PWD $GOPATH/bin/collector <REGISTRY> <REPO>
 
 where REGISTRY is either a private registry (e.g., http://reg.myorg.com) or Docker Hub (index.docker.io), and REPO is a repository for which you'd like to collect data. For a private registry (with search enabled), if no REPO is specified, data is collected from all the repositories.

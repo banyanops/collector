@@ -1,4 +1,4 @@
-package main
+package collector
 
 import (
 	"bytes"
@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	config "github.com/banyanops/collector/config"
 	blog "github.com/ccpaging/log4go"
 )
 
@@ -23,12 +24,12 @@ var (
 	DockerTransport *http.Transport
 	DockerTLSVerify = true
 	DockerProto     = "unix"
-	DockerAddr      = DUMMYDOMAIN
+	DockerAddr      = dummydomain
 )
 
 const (
-	// DUMMYDOMAIN is a fake domain name needed to perform HTTP requests to the Docker UNIX socket.
-	DUMMYDOMAIN = "example.com"
+	// dummydomain is a fake domain name needed to perform HTTP requests to the Docker UNIX socket.
+	dummydomain = "example.com"
 	// HTTPTIMEOUT is the time to wait for an HTTP request to complete before giving up.
 	HTTPTIMEOUT = 32 * time.Second
 	// TARGETCONTAINERDIR is the path in the target container where the exported binaries and scripts are located.
@@ -147,7 +148,7 @@ func doDockerAPI(tr *http.Transport, operation, apipath string, jsonString []byt
 	var host string
 	HTTP := "http://"
 	if DockerProto == "unix" {
-		host = DUMMYDOMAIN
+		host = dummydomain
 	} else {
 		host = DockerAddr
 		if DockerTLSVerify {
@@ -193,7 +194,7 @@ func createCmd(imageID ImageIDType, scriptName, staticBinary, dirPath string) (j
 	container.User = "0"
 	container.AttachStdout = true
 	container.AttachStderr = true
-	container.HostConfig.Binds = []string{BANYANHOSTDIR() + "/hosttarget" + ":" + TARGETCONTAINERDIR + ":ro"}
+	container.HostConfig.Binds = []string{config.BANYANHOSTDIR() + "/hosttarget" + ":" + TARGETCONTAINERDIR + ":ro"}
 	container.Image = string(imageID)
 
 	container.Entrypoint = []string{TARGETCONTAINERDIR + "/bin/bash-static", "-c"}

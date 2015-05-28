@@ -1,4 +1,4 @@
-package main
+package collector
 
 import (
 	"bytes"
@@ -30,7 +30,7 @@ func TestBashScriptRun(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	registryspec = "index.docker.io"
+	RegistrySpec = "index.docker.io"
 	registryAPIURL, hubAPI, XRegistryAuth = getRegistryURL()
 	metadata := ImageMetadataInfo{
 		Repo: "ubuntu",
@@ -40,8 +40,8 @@ func TestBashScriptRun(t *testing.T) {
 	PullImage(metadata)
 
 	os.Setenv("BANYAN_HOST_DIR", "/tmp/banyandir")
-	createDirIfNotExist("/tmp/banyandir/hosttarget/bin")
-	createDirIfNotExist("/tmp/banyandir/hosttarget/defaultscripts")
+	CreateDirIfNotExist("/tmp/banyandir/hosttarget/bin")
+	CreateDirIfNotExist("/tmp/banyandir/hosttarget/defaultscripts")
 	copyDirTree(os.Getenv("PWD")+"/data/bin/*", "/tmp/banyandir/hosttarget/bin")
 	copyDir(os.Getenv("PWD")+"/data/defaultscripts", "/tmp/banyandir/hosttarget/defaultscripts")
 	bs := newBashScript("pkgextractscript.sh", "/banyancollector/defaultscripts", []string{})

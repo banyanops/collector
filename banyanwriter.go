@@ -1,9 +1,10 @@
-package main
+package collector
 
 import (
 	"encoding/json"
 	"time"
 
+	config "github.com/banyanops/collector/config"
 	blog "github.com/ccpaging/log4go"
 )
 
@@ -97,7 +98,7 @@ func jsonifyAndSendToBanyan(data interface{}, identifier string, authToken strin
 		err := doPostBanyanAPI(identifier, authToken, URL, b)
 		if err != nil {
 			blog.Error(err, identifier+": retrying sending to Banyan API")
-			time.Sleep(RETRYDURATION)
+			time.Sleep(config.RETRYDURATION)
 			continue
 		}
 		break

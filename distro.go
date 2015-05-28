@@ -1,6 +1,6 @@
-// Functions for identifying Linux distribution type and version.
+// distro.go has functions for identifying Linux distribution type and version.
 // Currently handles some CentOS, Ubuntu, and Debian versions.
-package main
+package collector
 
 import (
 	"strings"

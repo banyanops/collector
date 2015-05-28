@@ -1,5 +1,5 @@
-// This file has functions needed to interact with the Banyan service.
-package main
+// banyan.go has functions needed to interact with the Banyan service.
+package collector
 
 import (
 	"bufio"
@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 
+	config "github.com/banyanops/collector/config"
 	blog "github.com/ccpaging/log4go"
 	flag "github.com/docker/docker/pkg/mflag"
 )
@@ -18,9 +19,9 @@ import (
 var (
 	banyanURL = flag.String([]string{"#-banyanURL"},
 		"https://app.banyanops.com/api_server_host_v1", "URL of Banyan API server")
-	tokenStore = flag.String([]string{"#-tokenstore"}, BANYANDIR()+"/hostcollector/token",
+	tokenStore = flag.String([]string{"#-tokenstore"}, config.BANYANDIR()+"/hostcollector/token",
 		"File to record the Banyan Collector auth token")
-	hubAPI bool
+	HubAPI bool
 )
 
 // getTokenStore reads the Banyan Collector auth token from the tokenstore file.
@@ -52,16 +53,16 @@ func persistToken(token string) {
 	return
 }
 
-// registerCollector obtains the Banyan Collector auth token for this Collector instance.
+// RegisterCollector obtains the Banyan Collector auth token for this Collector instance.
 // The first time the Collector is registered, it obtains the token from the Banyan service
 // by providing the Organization ID string from the environment variable COLLECTOR_ID.
 // This value can be obtained by registering an Organization through the Banyan web UI.
 // After initial registration is successful, then on subsequent startups of Collector
 // the Collector auth token will be retrieved from a local file specified using the
 // -tokenstore flag on the command line.
-func registerCollector() (token string) {
+func RegisterCollector() (token string) {
 	banyanWriter := false
-	for _, d := range strings.Split(*dests, ",") {
+	for _, d := range strings.Split(*config.Dests, ",") {
 		if d == "banyan" {
 			banyanWriter = true
 			break

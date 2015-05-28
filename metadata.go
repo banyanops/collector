@@ -1,6 +1,6 @@
-// Functions that gather and save metadata about a Docker image, including its ID, Author, Parent,
+// metadata.go has functions to gather and save metadata about a Docker image, including its ID, Author, Parent,
 // Creation time, etc.
-package main
+package collector
 
 import (
 	"encoding/json"
@@ -12,8 +12,29 @@ import (
 	"strings"
 	"time"
 
+	config "github.com/banyanops/collector/config"
 	blog "github.com/ccpaging/log4go"
 )
+
+var (
+	ReposToProcess = make(map[RepoType]bool)
+	ExcludeRepo    = func() map[RepoType]bool {
+		excludeList := []RepoType{} // You can add repos to this list
+		m := make(map[RepoType]bool)
+		for _, r := range excludeList {
+			m[r] = true
+		}
+		return m
+	}()
+)
+
+// ImageSet is a set of image IDs.
+type ImageSet map[ImageIDType]bool
+
+// NewImageSet creates a new ImageSet.
+func NewImageSet() ImageSet {
+	return ImageSet(make(map[ImageIDType]bool))
+}
 
 // HubInfo records the index and auth information provided by Docker Hub to access a repository.
 type HubInfo struct {
@@ -152,7 +173,7 @@ func GetImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo, imi []ImageMetadata
 		if e != nil {
 			blog.Warn(e, " getRepos")
 			blog.Warn("Retrying")
-			time.Sleep(RETRYDURATION)
+			time.Sleep(config.RETRYDURATION)
 			continue
 		}
 
@@ -162,7 +183,7 @@ func GetImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo, imi []ImageMetadata
 		if e != nil {
 			blog.Warn(e, " getTags")
 			blog.Warn("Retrying")
-			time.Sleep(RETRYDURATION)
+			time.Sleep(config.RETRYDURATION)
 			continue
 		}
 
@@ -172,7 +193,7 @@ func GetImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo, imi []ImageMetadata
 		if e != nil {
 			blog.Warn(e, " getImageMetadata")
 			blog.Warn("Retrying")
-			time.Sleep(RETRYDURATION)
+			time.Sleep(config.RETRYDURATION)
 			continue
 		}
 		break
@@ -192,7 +213,7 @@ func GetImageMetadataHub(oldImiSet ImiSet) (tagSlice []TagInfo, imi []ImageMetad
 		if e != nil {
 			blog.Warn(e, " getReposHub")
 			blog.Warn("Retrying")
-			time.Sleep(RETRYDURATION)
+			time.Sleep(config.RETRYDURATION)
 			continue
 		}
 
@@ -202,7 +223,7 @@ func GetImageMetadataHub(oldImiSet ImiSet) (tagSlice []TagInfo, imi []ImageMetad
 		if e != nil {
 			blog.Warn(e, " getTagsMetadataHub")
 			blog.Warn("Retrying")
-			time.Sleep(RETRYDURATION)
+			time.Sleep(config.RETRYDURATION)
 			continue
 		}
 		break
@@ -215,15 +236,15 @@ func GetImageMetadataHub(oldImiSet ImiSet) (tagSlice []TagInfo, imi []ImageMetad
 // However, if the user specified a list of repositories, then getRepos() just returns that list
 // of specified repositories and does not query the Docker registry.
 func getRepos() (repoSlice []RepoType, err error) {
-	if len(reposToProcess) > 0 {
-		for repo := range reposToProcess {
+	if len(ReposToProcess) > 0 {
+		for repo := range ReposToProcess {
 			repoSlice = append(repoSlice, repo)
 		}
 		return
 	}
 
 	// a query with an empty query string returns all the repos
-	r, err := http.Get(registryAPIURL + "/v1/search?q=")
+	r, err := http.Get(RegistryAPIURL + "/v1/search?q=")
 	if err != nil {
 		return
 	}
@@ -238,7 +259,7 @@ func getRepos() (repoSlice []RepoType, err error) {
 		return
 	}
 	for _, elem := range result.Results {
-		if excludeRepo[RepoType(elem.Name)] {
+		if ExcludeRepo[RepoType(elem.Name)] {
 			continue
 		}
 		repoSlice = append(repoSlice, RepoType(elem.Name))
@@ -253,7 +274,7 @@ func getReposHub() (hubInfo []HubInfo, err error) {
 	// the Docker auth token and registry URL to access that repository.
 	lookup := func(repo RepoType) (dockerToken, registryURL string) {
 		client := &http.Client{}
-		URL := registryAPIURL + "/v1/repositories/" + string(repo) + "/images"
+		URL := RegistryAPIURL + "/v1/repositories/" + string(repo) + "/images"
 		req, e := http.NewRequest("GET", URL, nil)
 		req.Header.Set("X-Docker-Token", "true")
 		r, e := client.Do(req)
@@ -276,8 +297,8 @@ func getReposHub() (hubInfo []HubInfo, err error) {
 		registryURL = strings.TrimSpace(arr[0])
 		return
 	}
-	if len(reposToProcess) > 0 {
-		for repo := range reposToProcess {
+	if len(ReposToProcess) > 0 {
+		for repo := range ReposToProcess {
 			dockerToken, registryURL := lookup(repo)
 			if dockerToken == "" {
 				blog.Error(repo, ":Could not find info for repo.")
@@ -294,7 +315,7 @@ func getReposHub() (hubInfo []HubInfo, err error) {
 func getTags(repoSlice []RepoType) (tagSlice []TagInfo, e error) {
 	for _, repo := range repoSlice {
 		// get tags for one repo
-		r, e := http.Get(registryAPIURL + "/v1/repositories/" + string(repo) + "/tags")
+		r, e := http.Get(RegistryAPIURL + "/v1/repositories/" + string(repo) + "/tags")
 		if e != nil {
 			return nil, e
 		}
@@ -490,17 +511,17 @@ func lookupMetadataHub(repo RepoType, tag TagType, imageID ImageIDType, hubInfo 
 	return
 }
 
-// getNewImageMetadata takes the set of existing images, queries the registry to find any changes,
+// GetNewImageMetadata takes the set of existing images, queries the registry to find any changes,
 // and then brings the Output Writer up to date by telling it the obsolete metadata to delete
 // and the new metadata to add.
-func getNewImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo,
+func GetNewImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo,
 	imi []ImageMetadataInfo, currentImiSet ImiSet) {
 
 	var currentImi []ImageMetadataInfo
 	switch {
-	case hubAPI == false:
+	case HubAPI == false:
 		tagSlice, currentImi = GetImageMetadata(oldImiSet)
-	case hubAPI == true:
+	case HubAPI == true:
 		tagSlice, currentImi = GetImageMetadataHub(oldImiSet)
 	}
 
@@ -539,7 +560,7 @@ func RemoveObsoleteMetadata(obsolete []ImageMetadataInfo) {
 		return
 	}
 
-	for _, writer := range writerList {
+	for _, writer := range WriterList {
 		writer.RemoveImageMetadata(obsolete)
 	}
 
@@ -593,7 +614,7 @@ func getImageMetadata(tagSlice []TagInfo, oldImiSet ImiSet) (imi []ImageMetadata
 		go func(imageID ImageIDType, ch chan ImageMetadataInfo, errch chan error) {
 			var metadata ImageMetadataInfo
 			blog.Info("Get Metadata for Image: %s", string(imageID))
-			response, e := doHTTPGet(registryAPIURL + "/v1/images/" + string(imageID) + "/json")
+			response, e := doHTTPGet(RegistryAPIURL + "/v1/images/" + string(imageID) + "/json")
 			if e != nil {
 				errch <- e
 				return
@@ -651,7 +672,7 @@ func SaveImageMetadata(imi []ImageMetadataInfo) {
 		return
 	}
 
-	for _, writer := range writerList {
+	for _, writer := range WriterList {
 		writer.AppendImageMetadata(imi)
 	}
 
