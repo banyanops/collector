@@ -27,8 +27,8 @@ func TestPullImage(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	registryspec = "index.docker.io"
-	registryAPIURL, hubAPI, XRegistryAuth = getRegistryURL()
+	RegistrySpec = "index.docker.io"
+	RegistryAPIURL, HubAPI, XRegistryAuth = GetRegistryURL()
 	metadata := ImageMetadataInfo{
 		Repo: "busybox",
 		Tag:  "latest",
@@ -50,7 +50,7 @@ func TestRemoveImage(t *testing.T) {
 		Tag:  "buildroot-2014.02",
 	}
 	fmt.Println("TestRemoveImage %v %v", metadata1, metadata2)
-	RemoveImages([]ImageMetadataInfo{metadata1}, getImageToMDMap([]ImageMetadataInfo{metadata1, metadata2}))
+	RemoveImages([]ImageMetadataInfo{metadata1}, GetImageToMDMap([]ImageMetadataInfo{metadata1, metadata2}))
 	return
 }
 
@@ -61,7 +61,7 @@ func dockerAuth() (user, password, registry string, e error) {
 	if registry == "" {
 		registry = "index.docker.io"
 	}
-	registryAPIURL = "https://" + user + ":" + password + "@" + registry
+	RegistryAPIURL = "https://" + user + ":" + password + "@" + registry
 
 	if user == "" || password == "" {
 		e = fmt.Errorf("Please put valid credentials for registry " + registry + " in envvars DOCKER_USER and DOCKER_PASSWORD.")
@@ -79,7 +79,7 @@ func TestGetReposHub(t *testing.T) {
 	if registry != "index.docker.io" {
 		t.Fatal("TestRegReposHub only works with DOCKER_REGISTRY=index.docker.io")
 	}
-	reposToProcess["library/mysql"] = true
+	ReposToProcess["library/mysql"] = true
 	//reposToProcess["ncarlier/redis"] = true
 	hubInfo, e := getReposHub()
 	if e != nil {
@@ -101,7 +101,7 @@ func TestGetTagsMetadataHub(t *testing.T) {
 	if registry != "index.docker.io" {
 		t.Fatal("TestGetTagsMetadataHub only works with DOCKER_REGISTRY=index.docker.io")
 	}
-	reposToProcess["library/mysql"] = true
+	ReposToProcess["library/mysql"] = true
 	hubInfo, e := getReposHub()
 	if e != nil {
 		t.Fatal(e)

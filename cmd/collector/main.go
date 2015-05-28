@@ -48,14 +48,6 @@ var (
 	// positional arguments: a list of repos to process, all others are ignored.
 )
 
-func getImageToMDMap(imageMDs []collector.ImageMetadataInfo) (imageToMDMap map[string][]collector.ImageMetadataInfo) {
-	imageToMDMap = make(map[string][]collector.ImageMetadataInfo)
-	for _, imageMD := range imageMDs {
-		imageToMDMap[imageMD.Image] = append(imageToMDMap[imageMD.Image], imageMD)
-	}
-	return
-}
-
 // DoIteration runs one iteration of the main loop to get new images, extract packages and dependencies,
 // and save results.
 func DoIteration(authToken string, processedImages collector.ImageSet, oldImiSet collector.ImiSet,
@@ -72,7 +64,7 @@ func DoIteration(authToken string, processedImages collector.ImageSet, oldImiSet
 
 	// number of images processed for each repository in this iteration
 	imageCount := make(map[collector.RepoType]int)
-	imageToMDMap := getImageToMDMap(imi)
+	imageToMDMap := collector.GetImageToMDMap(imi)
 
 	for {
 		pulledImages := collector.NewImageSet()

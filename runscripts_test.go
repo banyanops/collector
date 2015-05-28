@@ -31,7 +31,7 @@ func TestBashScriptRun(t *testing.T) {
 		t.Fatal(e)
 	}
 	RegistrySpec = "index.docker.io"
-	registryAPIURL, hubAPI, XRegistryAuth = getRegistryURL()
+	RegistryAPIURL, HubAPI, XRegistryAuth = GetRegistryURL()
 	metadata := ImageMetadataInfo{
 		Repo: "ubuntu",
 		Tag:  "latest",
@@ -42,8 +42,8 @@ func TestBashScriptRun(t *testing.T) {
 	os.Setenv("BANYAN_HOST_DIR", "/tmp/banyandir")
 	CreateDirIfNotExist("/tmp/banyandir/hosttarget/bin")
 	CreateDirIfNotExist("/tmp/banyandir/hosttarget/defaultscripts")
-	copyDirTree(os.Getenv("PWD")+"/data/bin/*", "/tmp/banyandir/hosttarget/bin")
-	copyDir(os.Getenv("PWD")+"/data/defaultscripts", "/tmp/banyandir/hosttarget/defaultscripts")
+	CopyDirTree(os.Getenv("PWD")+"/data/bin/*", "/tmp/banyandir/hosttarget/bin")
+	CopyDir(os.Getenv("PWD")+"/data/defaultscripts", "/tmp/banyandir/hosttarget/defaultscripts")
 	bs := newBashScript("pkgextractscript.sh", "/banyancollector/defaultscripts", []string{})
 	b, err := bs.Run(ImageIDType("ubuntu"))
 	if err != nil {

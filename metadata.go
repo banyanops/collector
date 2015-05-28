@@ -162,6 +162,15 @@ func (a ByDateTime) Less(i int, j int) bool {
 	return a[i].Datetime.After(a[j].Datetime)
 }
 
+// GetImageToMDMap takes image metadata structs and produces a map of imageID to metadata struct.
+func GetImageToMDMap(imageMDs []ImageMetadataInfo) (imageToMDMap map[string][]ImageMetadataInfo) {
+	imageToMDMap = make(map[string][]ImageMetadataInfo)
+	for _, imageMD := range imageMDs {
+		imageToMDMap[imageMD.Image] = append(imageToMDMap[imageMD.Image], imageMD)
+	}
+	return
+}
+
 // GetImageMetadata returns repository/tag/image metadata queried from a Docker registry.
 // If the user has specified the repositories to examine, then no other repositories are examined.
 // If the user has not specified repositories, then the registry search API is used to
