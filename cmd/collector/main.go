@@ -218,7 +218,6 @@ func doFlags() {
 // checkRepoList gets the list of repositories to process from the command line
 // and from the repoList file.
 func checkRepoList() {
-	collector.ReposToProcess = make(map[collector.RepoType]bool)
 	// check repositories specified on the command line
 	if len(flag.Args()) > 1 {
 		for _, repo := range flag.Args()[1:] {
