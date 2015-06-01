@@ -68,12 +68,14 @@ func (f *FileWriter) WriteImageAllData(outMapMap map[string]map[string]interface
 // AppendImageMetadata appends image metadata to file
 func (f *FileWriter) AppendImageMetadata(imageMetadata []ImageMetadataInfo) {
 	blog.Info("Appending image metadata to file...")
+	f.format = "json"
 	f.handleImageMetadata(imageMetadata, "ADD")
 }
 
 // RemoveImageMetadata removes image metadata from file
 func (f *FileWriter) RemoveImageMetadata(imageMetadata []ImageMetadataInfo) {
 	blog.Info("Removing image metadata from file...")
+	f.format = "json"
 	f.handleImageMetadata(imageMetadata, "REMOVE")
 }
 

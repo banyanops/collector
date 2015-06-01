@@ -114,6 +114,9 @@ func DoIteration(authToken string, processedImages collector.ImageSet, oldImiSet
 		if e := persistImageList(pulledImages); e != nil {
 			blog.Error(e, "Failed to persist list of collected images")
 		}
+		if checkRepoList(false) == true {
+			break
+		}
 	}
 	return
 }
@@ -217,38 +220,53 @@ func doFlags() {
 
 // checkRepoList gets the list of repositories to process from the command line
 // and from the repoList file.
-func checkRepoList() {
+func checkRepoList(initial bool) (updates bool) {
+	newList := make(map[collector.RepoType]bool)
+
 	// check repositories specified on the command line
 	if len(flag.Args()) > 1 {
 		for _, repo := range flag.Args()[1:] {
-			collector.ReposToProcess[collector.RepoType(repo)] = true
+			newList[collector.RepoType(repo)] = true
+			if initial {
+				updates = true
+			}
 		}
 	}
 	// check repositories specified in the repoList file. Ignore file read errors.
 	data, err := ioutil.ReadFile(*repoList)
 	if err != nil {
-		blog.Info("Repolist: " + *repoList + " not specified")
-		return
-	}
-
-	arr := strings.Split(string(data), "\n")
-	for _, line := range arr {
-		// skip over comments and whitespace
-		arr := strings.Split(line, "#")
-		repo := arr[0]
-		repotrim := strings.TrimSpace(repo)
-		if repotrim != "" {
-			collector.ReposToProcess[collector.RepoType(repotrim)] = true
+		if initial {
+			blog.Info("Repolist: " + *repoList + " not specified")
+		}
+	} else {
+		arr := strings.Split(string(data), "\n")
+		for _, line := range arr {
+			// skip over comments and whitespace
+			arr := strings.Split(line, "#")
+			repo := arr[0]
+			repotrim := strings.TrimSpace(repo)
+			if repotrim != "" {
+				r := collector.RepoType(repotrim)
+				newList[r] = true
+				if _, ok := collector.ReposToProcess[r]; !ok {
+					updates = true
+				}
+			}
 		}
 	}
 
-	if len(collector.ReposToProcess) > 0 {
+	//if len(collector.ReposToProcess) > 0 {
+	if len(newList) > 0 {
 		config.FilterRepos = true
-		blog.Info("Limiting collection to the following repos:")
-		for repo := range collector.ReposToProcess {
-			blog.Info(repo)
+		if updates {
+			blog.Info("Limiting collection to the following repos:")
+			for repo := range newList {
+				blog.Info(repo)
+			}
 		}
 	}
+	collector.ReposToProcess = newList
+	return
 }
 
 func setupLogging() {
@@ -310,11 +328,12 @@ func main() {
 	duration := time.Duration(*poll) * time.Second
 
 	// Main infinite loop.
+	checkRepoList(true)
 	for {
-		checkRepoList()
 		ImiSet, PulledList = DoIteration(authToken, processedImages, ImiSet, PulledList)
 
 		blog.Info("Looping in %d seconds", *poll)
 		time.Sleep(duration)
+		checkRepoList(false)
 	}
 }

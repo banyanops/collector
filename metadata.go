@@ -549,8 +549,15 @@ func GetNewImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo,
 	obsolete := []ImageMetadataInfo{}
 	for metadata := range oldImiSet {
 		if _, ok := currentImiSet[metadata]; !ok {
-			obsolete = append(obsolete, metadata)
-			blog.Info("Need to remove ImageMetadata: ", metadata)
+			if len(ReposToProcess) > 0 {
+				if _, present := ReposToProcess[RepoType(metadata.Repo)]; present {
+					obsolete = append(obsolete, metadata)
+					blog.Info("Need to remove ImageMetadata: %v", metadata)
+				}
+			} else {
+				obsolete = append(obsolete, metadata)
+				blog.Info("Need to remove ImageMetadata: %v", metadata)
+			}
 		}
 	}
 	if len(obsolete) > 0 {
