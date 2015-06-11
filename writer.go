@@ -1,9 +1,9 @@
 package collector
 
 import (
-	config "github.com/banyanops/collector/config"
-	blog "github.com/ccpaging/log4go"
-	"strings"
+//config "github.com/banyanops/collector/config"
+//blog "github.com/ccpaging/log4go"
+//"strings"
 )
 
 // This is a writer plugin interface. Currently supported plugins are:
@@ -24,21 +24,3 @@ type Writer interface {
 var (
 	WriterList []Writer
 )
-
-func SetOutputWriters(authToken string) {
-	dests := strings.Split(*config.Dests, ",")
-	for _, dest := range dests {
-		var writer Writer
-		switch dest {
-		case "file":
-			writer = newFileWriter("json", *config.BanyanOutDir)
-		case "banyan":
-			writer = newBanyanWriter(authToken)
-		default:
-			blog.Error("No such output writer!")
-			//ignore the rest and keep going
-			continue
-		}
-		WriterList = append(WriterList, writer)
-	}
-}

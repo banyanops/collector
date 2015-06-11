@@ -185,6 +185,18 @@ func GetImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo, imi []ImageMetadata
 			time.Sleep(config.RETRYDURATION)
 			continue
 		}
+		if len(repoSlice) == 0 {
+			// For some reason (like, registry search doesn't work), we are not
+			// seeing any repos in the registry.
+			// So, just reconstruct the list of repos that we saw earlier.
+			repomap := make(map[string]bool)
+			for imi := range oldImiSet {
+				if repomap[imi.Repo] == false {
+					repoSlice = append(repoSlice, RepoType(imi.Repo))
+					repomap[imi.Repo] = true
+				}
+			}
+		}
 
 		blog.Info("Get Tags")
 		// Now get a list of all the tags
@@ -253,8 +265,18 @@ func getRepos() (repoSlice []RepoType, err error) {
 	}
 
 	// a query with an empty query string returns all the repos
-	r, err := http.Get(RegistryAPIURL + "/v1/search?q=")
+	req, err := http.NewRequest("GET", RegistryAPIURL+"/v1/search?q=", nil)
 	if err != nil {
+		blog.Error(err, ":getRepos NewRequest")
+		return
+	}
+	if BasicAuth != "" {
+		req.Header.Set("Authorization", "Basic "+BasicAuth)
+	}
+	client := &http.Client{}
+	r, err := client.Do(req)
+	if err != nil {
+		blog.Error(err, ":getRepos client.Do")
 		return
 	}
 	defer r.Body.Close()
@@ -281,11 +303,14 @@ func getRepos() (repoSlice []RepoType, err error) {
 func getReposHub() (hubInfo []HubInfo, err error) {
 	// lookup defines a function that takes a repository name as input and returns
 	// the Docker auth token and registry URL to access that repository.
+	client := &http.Client{}
 	lookup := func(repo RepoType) (dockerToken, registryURL string) {
-		client := &http.Client{}
 		URL := RegistryAPIURL + "/v1/repositories/" + string(repo) + "/images"
 		req, e := http.NewRequest("GET", URL, nil)
 		req.Header.Set("X-Docker-Token", "true")
+		if BasicAuth != "" {
+			req.Header.Set("Authorization", "Basic "+BasicAuth)
+		}
 		r, e := client.Do(req)
 		if e != nil {
 			blog.Error(e, ":getReposHub HTTP request failed")
@@ -322,15 +347,23 @@ func getReposHub() (hubInfo []HubInfo, err error) {
 
 // getTags queries the Docker registry for the list of the tags for each repository.
 func getTags(repoSlice []RepoType) (tagSlice []TagInfo, e error) {
+	client := &http.Client{}
 	for _, repo := range repoSlice {
 		// get tags for one repo
-		r, e := http.Get(RegistryAPIURL + "/v1/repositories/" + string(repo) + "/tags")
+		req, e := http.NewRequest("GET", RegistryAPIURL+"/v1/repositories/"+string(repo)+"/tags", nil)
+		if e != nil {
+			return nil, e
+		}
+		if BasicAuth != "" {
+			req.Header.Set("Authorization", "Basic "+BasicAuth)
+		}
+		r, e := client.Do(req)
 		if e != nil {
 			return nil, e
 		}
 		defer r.Body.Close()
 		if r.StatusCode != 200 {
-			blog.Error("Skipping Repo:", repo, "tag lookup status code:", r.StatusCode)
+			blog.Error("Skipping Repo: %s, tag lookup status code %d", string(repo), r.StatusCode)
 			continue
 		}
 		response, e := ioutil.ReadAll(r.Body)
@@ -527,6 +560,7 @@ func GetNewImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo,
 	imi []ImageMetadataInfo, currentImiSet ImiSet) {
 
 	var currentImi []ImageMetadataInfo
+	//config.BanyanUpdate("Loading Registry Metadata")
 	switch {
 	case HubAPI == false:
 		tagSlice, currentImi = GetImageMetadata(oldImiSet)
@@ -564,9 +598,26 @@ func GetNewImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo,
 		RemoveObsoleteMetadata(obsolete)
 	}
 
+	if len(imi) > 0 || len(obsolete) > 0 {
+		config.BanyanUpdate("Detected changes in registry metadata")
+	}
+
 	// Sort image metadata from newest image to oldest image
 	sort.Sort(ByDateTime(imi))
 	return
+}
+
+const maxStatusLen = 100
+
+func statusMessageMD(imi []ImageMetadataInfo) string {
+	statString := ""
+	for _, md := range imi {
+		statString += md.Repo + ":" + md.Tag + ", "
+		if len(statString) > maxStatusLen {
+			return statString[0:maxStatusLen]
+		}
+	}
+	return statString
 }
 
 // RemoveObsoleteMetadata removes obsolete metadata from the Banyan service.
@@ -575,6 +626,8 @@ func RemoveObsoleteMetadata(obsolete []ImageMetadataInfo) {
 		blog.Warn("No image metadata to save!")
 		return
 	}
+
+	config.BanyanUpdate("Remove Metadata", statusMessageMD(obsolete))
 
 	for _, writer := range WriterList {
 		writer.RemoveImageMetadata(obsolete)
@@ -611,6 +664,7 @@ func getImageMetadata(tagSlice []TagInfo, oldImiSet ImiSet) (imi []ImageMetadata
 	ch := make(chan ImageMetadataInfo)
 	errch := make(chan error)
 	goCount := 0
+	client := &http.Client{}
 	for imageID := range imageMap {
 		var curr ImageMetadataInfo
 		if previousImages[imageID] {
@@ -630,7 +684,15 @@ func getImageMetadata(tagSlice []TagInfo, oldImiSet ImiSet) (imi []ImageMetadata
 		go func(imageID ImageIDType, ch chan ImageMetadataInfo, errch chan error) {
 			var metadata ImageMetadataInfo
 			blog.Info("Get Metadata for Image: %s", string(imageID))
-			response, e := doHTTPGet(RegistryAPIURL + "/v1/images/" + string(imageID) + "/json")
+			if *RegistryProto == "quay" {
+				// TODO: Properly support quay.io image metadata instead of faking it.
+				t := time.Date(2011, time.January, 1, 1, 0, 0, 0, time.UTC)
+				metadata.Image = string(imageID)
+				metadata.Datetime = t
+				ch <- metadata
+				return
+			}
+			response, e := doHTTPGet(client, RegistryAPIURL+"/v1/images/"+string(imageID)+"/json", BasicAuth)
 			if e != nil {
 				errch <- e
 				return
@@ -688,9 +750,38 @@ func SaveImageMetadata(imi []ImageMetadataInfo) {
 		return
 	}
 
+	config.BanyanUpdate("Save Image Metadata", statusMessageMD(imi))
+
 	for _, writer := range WriterList {
 		writer.AppendImageMetadata(imi)
 	}
 
 	return
+}
+
+// ValidRepoName verifies that the name of a repo is in a legal format.
+func ValidRepoName(name string) bool {
+	if len(name) == 0 {
+		return false
+	}
+	if len(name) > 256 {
+		blog.Error("Invalid repo name, too long: %s", name)
+		return false
+	}
+	for _, c := range name {
+		switch {
+		case c >= 'a' && c <= 'z':
+			continue
+		case c >= 'A' && c <= 'Z':
+			continue
+		case c >= '0' && c <= '9':
+			continue
+		case c == '/' || c == '_' || c == '-' || c == '.':
+			continue
+		default:
+			blog.Error("Invalid repo name %s", name)
+			return false
+		}
+	}
+	return true
 }

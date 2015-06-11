@@ -19,7 +19,7 @@ type FileWriter struct {
 	dir    string
 }
 
-func newFileWriter(format string, dir string) Writer {
+func NewFileWriter(format string, dir string) Writer {
 	if format == "" {
 		format = "json"
 	}

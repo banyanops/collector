@@ -2,7 +2,9 @@
 package collector
 
 import (
+	"encoding/base64"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -12,7 +14,14 @@ func TestRegAuth(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	user, password, _, _ := RegAuth(registry)
+	basicAuth, _, _ := RegAuth(registry)
+	decoded, err := base64.StdEncoding.DecodeString(basicAuth)
+	if err != nil {
+		t.Fatal(err, "Unable to decode basicAuth", basicAuth)
+	}
+	arr := strings.Split(string(decoded), ":")
+	user := arr[0]
+	password := arr[1]
 	if user != expectedUser {
 		t.Fatal("user:", user, "expected:", expectedUser)
 	}

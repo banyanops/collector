@@ -15,16 +15,22 @@ import (
 const ()
 
 var (
+	// HubAPI indicates whether to use the Docker Hub API.
+	HubAPI        bool
 	HTTPSRegistry = flag.Bool([]string{"-registryhttps"}, true,
 		"Set to false if registry does not need HTTPS (SSL/TLS)")
 	AuthRegistry = flag.Bool([]string{"-registryauth"}, true,
 		"Set to false if registry does not need authentication")
+	RegistryProto = flag.String([]string{"-registryproto"}, "v1",
+		"Select the registry protocol to use: v1, quay")
 	// registryspec is the host.domainname of the registry
 	RegistrySpec string
 	// registryAPIURL is the http(s)://[user:password@]host.domainname of the registry
 	RegistryAPIURL string
 	// XRegistryAuth is the base64-encoded AuthConfig object (for X-Registry-Auth HTTP request header)
 	XRegistryAuth string
+	// BasicAuth is the base64-encoded Auth field read from $HOME/.dockercfg
+	BasicAuth string
 )
 
 // DockerAuthSet contains authentication info parsed from $HOME/.dockercfg
@@ -36,31 +42,22 @@ type DockerAuth struct {
 
 // GetRegistryURL determines the full URL, with or without HTTP Basic Auth, needed to
 // access the registry or Docker Hub.
-func GetRegistryURL() (URL string, hubAPI bool, XRegistryAuth string) {
-	user, password, fullRegistry, XRegistryAuth := RegAuth(RegistrySpec)
-	if *AuthRegistry == true && user == "" {
-		blog.Exit("Registry auth could not be determined from $HOME/.dockercfg")
+func GetRegistryURL() (URL string, hubAPI bool, BasicAuth string, XRegistryAuth string) {
+	basicAuth, fullRegistry, XRegistryAuth := RegAuth(RegistrySpec)
+	if *AuthRegistry == true {
+		if basicAuth == "" {
+			blog.Exit("Registry auth could not be determined from $HOME/.dockercfg")
+		}
+		BasicAuth = basicAuth
 	}
 	if *HTTPSRegistry == false {
-		if user != "" {
-			URL = "http://" + user + ":" + password + "@" + RegistrySpec
-		} else {
-			URL = "http://" + RegistrySpec
-		}
+		URL = "http://" + RegistrySpec
 	} else {
 		// HTTPS is required
 		if strings.HasPrefix(fullRegistry, "https://") {
-			if user != "" {
-				URL = "https://" + user + ":" + password + "@" + fullRegistry[8:]
-			} else {
-				URL = fullRegistry
-			}
+			URL = fullRegistry
 		} else {
-			if user != "" {
-				URL = "https://" + user + ":" + password + "@" + RegistrySpec
-			} else {
-				URL = "https://" + RegistrySpec
-			}
+			URL = "https://" + RegistrySpec
 		}
 		if strings.Contains(URL, "docker.io") {
 			hubAPI = true
@@ -73,7 +70,7 @@ func GetRegistryURL() (URL string, hubAPI bool, XRegistryAuth string) {
 // $HOME/.dockercfg to return the user authentication info and registry URL.
 // TODO: Change this to return authConfig instead of user&password, and then
 // use X-Registry-Auth in the HTTP request header.
-func RegAuth(registry string) (user, password, fullRegistry, authConfig string) {
+func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 	if *AuthRegistry == false {
 		fullRegistry = registry
 		return
@@ -88,7 +85,7 @@ func RegAuth(registry string) (user, password, fullRegistry, authConfig string) 
 
 // getRegAuth parses JSON data (from $HOME/.dockercfg) to get authentication and URL info
 // for the registry specified in the parameter list.
-func getRegAuth(data []byte, registry string) (user, password, fullRegistry, authConfig string) {
+func getRegAuth(data []byte, registry string) (basicAuth, fullRegistry, authConfig string) {
 	var das DockerAuthSet
 	e := json.Unmarshal(data, &das)
 	if e != nil {
@@ -110,8 +107,9 @@ func getRegAuth(data []byte, registry string) (user, password, fullRegistry, aut
 			if strings.HasSuffix(registry, "/v1/") {
 				registry = registry[0 : len(registry)-4]
 			}
-			user = up[0]
-			password = up[1]
+			user := up[0]
+			password := up[1]
+			basicAuth = d.Auth
 			fullRegistry = registry
 			authConfig = getAuthConfig(user, password, d.Auth, d.Email, r)
 			return

@@ -58,7 +58,7 @@ func TestWriteImageAllData(t *testing.T) {
 }
 
 func testWriteToFile(t *testing.T, outMapMap map[string]map[string]interface{}, script, image, destDir, format string, suffix string) (b []byte) {
-	fw := newFileWriter(format, destDir)
+	fw := NewFileWriter(format, destDir)
 	fw.WriteImageAllData(outMapMap)
 	// Test if correct output file exists
 	finalDir := destDir + "/" + trimExtension(script) + "/"
@@ -142,7 +142,7 @@ func TestWriteImageMetadata(t *testing.T) {
 
 func testWriteImageMDToFile(t *testing.T, imageMD []ImageMetadataInfo, destDir, format, action string) (b []byte) {
 	// Append/Remove
-	fw := newFileWriter(format, destDir)
+	fw := NewFileWriter(format, destDir)
 	switch action {
 	case "ADD":
 		fw.AppendImageMetadata(imageMD)

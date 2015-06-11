@@ -31,7 +31,7 @@ func TestBashScriptRun(t *testing.T) {
 		t.Fatal(e)
 	}
 	RegistrySpec = "index.docker.io"
-	RegistryAPIURL, HubAPI, XRegistryAuth = GetRegistryURL()
+	RegistryAPIURL, HubAPI, BasicAuth, XRegistryAuth = GetRegistryURL()
 	metadata := ImageMetadataInfo{
 		Repo: "ubuntu",
 		Tag:  "latest",

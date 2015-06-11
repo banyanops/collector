@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	config "github.com/banyanops/collector/config"
 	blog "github.com/ccpaging/log4go"
 )
 
@@ -27,6 +28,7 @@ func PullImage(metadata ImageMetadataInfo) {
 	tagspec := RegistrySpec + "/" + metadata.Repo + ":" + metadata.Tag
 	apipath := "/images/create?fromImage=" + tagspec
 	blog.Info("PullImages downloading %s, Image ID: %s", apipath, metadata.Image)
+	config.BanyanUpdate("Pull", apipath, metadata.Image)
 	resp, err := doDockerAPI(DockerTransport, "POST", apipath, []byte{}, XRegistryAuth)
 	if err != nil {
 		blog.Error(err, "PullImages failed for", RegistrySpec, metadata.Repo, metadata.Tag, metadata.Image)
@@ -52,6 +54,7 @@ func RemoveImages(PulledImages []ImageMetadataInfo, imageToMDMap map[string][]Im
 				metadata.Repo + ":" + metadata.Tag)
 			apipath := "/images/" + RegistrySpec + "/" + metadata.Repo + ":" + metadata.Tag
 			blog.Info("RemoveImages %s", apipath)
+			config.BanyanUpdate("Remove", apipath)
 			_, err := doDockerAPI(DockerTransport, "DELETE", apipath, []byte{}, "")
 			if err != nil {
 				blog.Error(err, "RemoveImages Repo:Tag", metadata.Repo, metadata.Tag,
@@ -66,8 +69,15 @@ func RemoveImages(PulledImages []ImageMetadataInfo, imageToMDMap map[string][]Im
 }
 
 // doHTTPGet performs an HTTP GET operation and returns the response.
-func doHTTPGet(URL string) (response []byte, e error) {
-	r, e := http.Get(URL)
+func doHTTPGet(client *http.Client, URL, basicAuth string) (response []byte, e error) {
+	req, e := http.NewRequest("GET", URL, nil)
+	if e != nil {
+		return nil, e
+	}
+	if basicAuth != "" {
+		req.Header.Set("Authorization", "Basic "+basicAuth)
+	}
+	r, e := client.Do(req)
 	if e != nil {
 		return nil, e
 	}
@@ -84,6 +94,7 @@ func GetImageAllData(pulledImages ImageSet) (outMapMap map[string]map[string]int
 	//Map ImageID -> Script Map; Script Map: Script name -> output
 	outMapMap = make(map[string]map[string]interface{})
 	for imageID := range pulledImages {
+		config.BanyanUpdate("Scripts", string(imageID))
 		outMap, err := runAllScripts(imageID)
 		if err != nil {
 			blog.Error(err, ": Error processing image", string(imageID))
@@ -95,8 +106,20 @@ func GetImageAllData(pulledImages ImageSet) (outMapMap map[string]map[string]int
 	return
 }
 
+func statusMessageImageData(outMapMap map[string]map[string]interface{}) string {
+	statString := ""
+	for imageID, _ := range outMapMap {
+		statString += imageID + ", "
+		if len(statString) > maxStatusLen {
+			return statString[0:maxStatusLen]
+		}
+	}
+	return statString
+}
+
 // SaveImageAllData saves output of all the scripts.
 func SaveImageAllData(outMapMap map[string]map[string]interface{} /*, dotfiles []DotFilesType*/) {
+	config.BanyanUpdate("Save Image Data", statusMessageImageData(outMapMap))
 	for _, writer := range WriterList {
 		writer.WriteImageAllData(outMapMap)
 	}

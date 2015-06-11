@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,7 +37,8 @@ var (
 	removeThresh = flag.Int([]string{"-removethresh"}, 10,
 		"Number of images that get pulled before removal")
 	maxImages = flag.Int([]string{"-maximages"}, 0, "Maximum number of new images to process per repository (0=unlimited)")
-	poll      = flag.Int64([]string{"p", "-poll"}, 60, "Polling interval in seconds")
+	//nextMaxImages int
+	poll = flag.Int64([]string{"p", "-poll"}, 60, "Polling interval in seconds")
 
 	// Docker remote API related parameters
 	dockerProto = flag.String([]string{"-dockerproto"}, "unix",
@@ -48,23 +49,35 @@ var (
 	// positional arguments: a list of repos to process, all others are ignored.
 )
 
-// DoIteration runs one iteration of the main loop to get new images, extract packages and dependencies,
-// and save results.
-func DoIteration(authToken string, processedImages collector.ImageSet, oldImiSet collector.ImiSet,
-	PulledList []collector.ImageMetadataInfo) (currentImiSet collector.ImiSet, PulledNew []collector.ImageMetadataInfo) {
+type RepoSet map[collector.RepoType]bool
+
+func NewRepoSet() RepoSet {
+	return make(map[collector.RepoType]bool)
+}
+
+// DoIteration runs one iteration of the main loop to get new images, extract data from them,
+// and saves results.
+func DoIteration(ReposToLimit RepoSet, authToken string,
+	processedImages collector.ImageSet, oldImiSet collector.ImiSet,
+	PulledList []collector.ImageMetadataInfo) (currentImiSet collector.ImiSet,
+	PulledNew []collector.ImageMetadataInfo) {
 	blog.Debug("DoIteration: processedImages is %v", processedImages)
 	PulledNew = PulledList
 	_ /*tagSlice*/, imi, currentImiSet := collector.GetNewImageMetadata(oldImiSet)
 
 	if len(imi) == 0 {
-		blog.Info("Nothing new in this iteration")
+		blog.Info("No new metadata in this iteration")
 		return
 	}
+	blog.Info("Obtained %d new metadata items in this iteration", len(imi))
 	collector.SaveImageMetadata(imi)
 
 	// number of images processed for each repository in this iteration
 	imageCount := make(map[collector.RepoType]int)
 	imageToMDMap := collector.GetImageToMDMap(imi)
+
+	// Set of repos to stop limiting according to maxImages after this iteration completes.
+	StopLimiting := NewRepoSet()
 
 	for {
 		pulledImages := collector.NewImageSet()
@@ -78,15 +91,24 @@ func DoIteration(authToken string, processedImages collector.ImageSet, oldImiSet
 			if pulledImages[collector.ImageIDType(metadata.Image)] {
 				continue
 			}
-			if *maxImages > 0 && imageCount[collector.RepoType(metadata.Repo)] >= *maxImages {
+			repo := collector.RepoType(metadata.Repo)
+			if _, ok := ReposToLimit[repo]; !ok {
+				// new repo we haven't seen before; apply maxImages limit to repo
+				blog.Info("Starting to apply maxImages limit to repo %s", string(repo))
+				ReposToLimit[repo] = true
+			}
+			if ReposToLimit[repo] && *maxImages > 0 && imageCount[repo] >= *maxImages {
 				blog.Info("Max image count %d reached for %s, skipping :%s",
 					*maxImages, metadata.Repo, metadata.Tag)
+				// stop applying the maxImages limit to repo
+				StopLimiting[repo] = true
 				continue
 			}
-			imageCount[collector.RepoType(metadata.Repo)]++
 			if processedImages[collector.ImageIDType(metadata.Image)] {
 				continue
 			}
+
+			imageCount[collector.RepoType(metadata.Repo)]++
 
 			// docker pull image
 			collector.PullImage(metadata)
@@ -105,7 +127,6 @@ func DoIteration(authToken string, processedImages collector.ImageSet, oldImiSet
 			break
 		}
 		// get and save image data for all the images in pulledimages
-		// TODO: parse if other outputs are obtained from scripts
 		outMapMap := collector.GetImageAllData(pulledImages)
 		collector.SaveImageAllData(outMapMap)
 		for imageID := range pulledImages {
@@ -114,9 +135,14 @@ func DoIteration(authToken string, processedImages collector.ImageSet, oldImiSet
 		if e := persistImageList(pulledImages); e != nil {
 			blog.Error(e, "Failed to persist list of collected images")
 		}
-		if checkRepoList(false) == true {
+		if checkConfigUpdate(false) == true {
 			break
 		}
+	}
+
+	for repo := range StopLimiting {
+		blog.Info("No longer enforcing maxImages limit on repo %s", repo)
+		ReposToLimit[repo] = false
 	}
 	return
 }
@@ -174,48 +200,6 @@ func printExampleUsage() {
 	fmt.Fprintf(os.Stderr, "  \t\t-v <USER_SCRIPTS_DIR>:/banyancollector/data/userscripts \\ \n")
 	fmt.Fprintf(os.Stderr, "  \t\t-e BANYAN_HOST_DIR=$HOME/.banyan \\ \n")
 	fmt.Fprintf(os.Stderr, "  \t\tbanyanops/collector index.docker.io banyanops/nginx\n\n")
-}
-
-// doFlags defines the cmdline Usage string and parses flag options.
-func doFlags() {
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "  Usage: %s [OPTIONS] REGISTRY REPO [REPO...]\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "\n  REGISTRY:\n")
-		fmt.Fprintf(os.Stderr, "\tURL of your Docker registry; use index.docker.io for Docker Hub \n")
-		fmt.Fprintf(os.Stderr, "\n  REPO:\n")
-		fmt.Fprintf(os.Stderr, "\tOne or more repos to gather info about; if no repo is specified Collector will gather info on *all* repos in the Registry\n")
-		fmt.Fprintf(os.Stderr, "\n  Environment variables:\n")
-		fmt.Fprintf(os.Stderr, "\tCOLLECTOR_DIR:   (Required) Directory that contains the \"data\" folder with Collector default scripts, e.g., $GOPATH/src/github.com/banyanops/collector\n")
-		fmt.Fprintf(os.Stderr, "\tCOLLECTOR_ID:    ID provided by Banyan web interface to register Collector with the Banyan service\n")
-		fmt.Fprintf(os.Stderr, "\tBANYAN_HOST_DIR: Host directory mounted into Collector/Target containers where results are stored (default: $HOME/.banyan)\n")
-		fmt.Fprintf(os.Stderr, "\tBANYAN_DIR:      (Specify only in Dockerfile) Directory in the Collector container where host directory BANYAN_HOST_DIR is mounted\n")
-		fmt.Fprintf(os.Stderr, "\tDOCKER_{HOST,CERT_PATH,TLS_VERIFY}: If set, e.g., by docker-machine, then they take precedence over --dockerProto and --dockerAddr\n")
-		printExampleUsage()
-		fmt.Fprintf(os.Stderr, "  Options:\n")
-		flag.PrintDefaults()
-	}
-	flag.Parse()
-	if config.COLLECTORDIR() == "" {
-		flag.Usage()
-		os.Exit(1)
-	}
-	if len(flag.Args()) < 1 {
-		flag.Usage()
-		os.Exit(1)
-	}
-	if *dockerProto != "unix" && *dockerProto != "tcp" {
-		flag.Usage()
-		os.Exit(1)
-	}
-	requiredDirs := []string{config.BANYANDIR(), filepath.Dir(*imageList), filepath.Dir(*repoList), *config.BanyanOutDir, collector.DefaultScriptsDir, collector.UserScriptsDir, collector.BinDir}
-	for _, dir := range requiredDirs {
-		blog.Debug("Creating directory: " + dir)
-		err := collector.CreateDirIfNotExist(dir)
-		if err != nil {
-			blog.Exit(err, ": Error in creating a required directory: ", dir)
-		}
-	}
-	collector.RegistrySpec = flag.Arg(0)
 }
 
 // checkRepoList gets the list of repositories to process from the command line
@@ -290,6 +274,22 @@ func copyBanyanData() {
 	collector.CopyDirTree(config.COLLECTORDIR()+"/data/bin/*", collector.BinDir)
 }
 
+func InfLoop(authToken string, processedImages collector.ImageSet, ImiSet collector.ImiSet,
+	PulledList []collector.ImageMetadataInfo) {
+	duration := time.Duration(*poll) * time.Second
+	reposToLimit := NewRepoSet()
+
+	for {
+		config.BanyanUpdate("New iteration")
+		ImiSet, PulledList = DoIteration(reposToLimit, authToken, processedImages, ImiSet, PulledList)
+
+		blog.Info("Looping in %d seconds", *poll)
+		config.BanyanUpdate("Sleeping for", strconv.FormatInt(*poll, 10), "seconds")
+		time.Sleep(duration)
+		checkConfigUpdate(false)
+	}
+}
+
 func main() {
 	doFlags()
 
@@ -306,12 +306,17 @@ func main() {
 		blog.Exit(e, ": Error in connecting to docker remote API socket")
 	}
 
-	collector.RegistryAPIURL, collector.HubAPI, collector.XRegistryAuth = collector.GetRegistryURL()
-	blog.Info("registry API URL: %s", collector.RegistryAPIURL)
-	authToken := collector.RegisterCollector()
+	authToken := RegisterCollector()
 
 	// Set output writers
-	collector.SetOutputWriters(authToken)
+	SetOutputWriters(authToken)
+	SetupBanyanStatus(authToken)
+
+	checkConfigUpdate(true)
+	if collector.RegistryAPIURL == "" {
+		collector.RegistryAPIURL, collector.HubAPI, collector.BasicAuth, collector.XRegistryAuth = collector.GetRegistryURL()
+		blog.Info("registry API URL: %s", collector.RegistryAPIURL)
+	}
 
 	// Images we have processed already
 	processedImages := collector.NewImageSet()
@@ -325,15 +330,6 @@ func main() {
 	ImiSet := collector.NewImiSet()
 	PulledList := []collector.ImageMetadataInfo{}
 
-	duration := time.Duration(*poll) * time.Second
-
 	// Main infinite loop.
-	checkRepoList(true)
-	for {
-		ImiSet, PulledList = DoIteration(authToken, processedImages, ImiSet, PulledList)
-
-		blog.Info("Looping in %d seconds", *poll)
-		time.Sleep(duration)
-		checkRepoList(false)
-	}
+	InfLoop(authToken, processedImages, ImiSet, PulledList)
 }

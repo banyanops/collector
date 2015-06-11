@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"testing"
@@ -28,7 +29,7 @@ func TestPullImage(t *testing.T) {
 		t.Fatal(e)
 	}
 	RegistrySpec = "index.docker.io"
-	RegistryAPIURL, HubAPI, XRegistryAuth = GetRegistryURL()
+	RegistryAPIURL, HubAPI, BasicAuth, XRegistryAuth = GetRegistryURL()
 	metadata := ImageMetadataInfo{
 		Repo: "busybox",
 		Tag:  "latest",
@@ -45,12 +46,15 @@ func TestRemoveImage(t *testing.T) {
 		Repo: "busybox",
 		Tag:  "latest",
 	}
-	metadata2 := ImageMetadataInfo{
-		Repo: "busybox",
-		Tag:  "buildroot-2014.02",
-	}
-	fmt.Println("TestRemoveImage %v %v", metadata1, metadata2)
-	RemoveImages([]ImageMetadataInfo{metadata1}, GetImageToMDMap([]ImageMetadataInfo{metadata1, metadata2}))
+	/*
+		metadata2 := ImageMetadataInfo{
+			Repo: "busybox",
+			Tag:  "buildroot-2014.02",
+		}
+	*/
+	// fmt.Println("TestRemoveImage %v %v", metadata1, metadata2)
+	fmt.Println("TestRemoveImage %v", metadata1)
+	RemoveImages([]ImageMetadataInfo{metadata1}, GetImageToMDMap([]ImageMetadataInfo{metadata1 /*, metadata2*/}))
 	return
 }
 
@@ -61,7 +65,9 @@ func dockerAuth() (user, password, registry string, e error) {
 	if registry == "" {
 		registry = "index.docker.io"
 	}
-	RegistryAPIURL = "https://" + user + ":" + password + "@" + registry
+	RegistryAPIURL = "https://" + registry
+	s := user + ":" + password
+	BasicAuth = base64.StdEncoding.EncodeToString([]byte(s))
 
 	if user == "" || password == "" {
 		e = fmt.Errorf("Please put valid credentials for registry " + registry + " in envvars DOCKER_USER and DOCKER_PASSWORD.")

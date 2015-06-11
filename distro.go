@@ -54,6 +54,18 @@ func getDistroID(distroName string) string {
 	if strings.HasPrefix(distroName, `CentOS release 6`) {
 		return "REDHAT-6Server"
 	}
+	if strings.HasPrefix(distroName, `Red Hat Enterprise Linux Server release 5`) ||
+		strings.HasPrefix(distroName, `Red Hat Enterprise Linux Server 5`) {
+		return "REDHAT-5Server"
+	}
+	if strings.HasPrefix(distroName, `Red Hat Enterprise Linux Server release 6`) ||
+		strings.HasPrefix(distroName, `Red Hat Enterprise Linux Server 6`) {
+		return "REDHAT-6Server"
+	}
+	if strings.HasPrefix(distroName, `Red Hat Enterprise Linux Server release 7`) ||
+		strings.HasPrefix(distroName, `Red Hat Enterprise Linux Server 7`) {
+		return "REDHAT-7Server"
+	}
 	if strings.HasPrefix(distroName, `Ubuntu Vivid`) {
 		return "UBUNTU-vivid"
 	}
