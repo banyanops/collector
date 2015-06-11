@@ -16,6 +16,12 @@ import (
 	blog "github.com/ccpaging/log4go"
 )
 
+const (
+	// maxGoCount imposes a limit on number of concurrent goroutines performing registry calls.
+	maxGoCount = 10
+	minGoCount = 5
+)
+
 var (
 	ReposToProcess = make(map[RepoType]bool)
 	ExcludeRepo    = func() map[RepoType]bool {
@@ -264,6 +270,11 @@ func getRepos() (repoSlice []RepoType, err error) {
 		return
 	}
 
+	if *RegistryProto == "v2" {
+		blog.Info("v2 registry search/catalog interface not yet supported in collector")
+		return
+	}
+
 	// a query with an empty query string returns all the repos
 	req, err := http.NewRequest("GET", RegistryAPIURL+"/v1/search?q=", nil)
 	if err != nil {
@@ -449,10 +460,21 @@ func getTagsMetadataHub(hubInfoSlice []HubInfo, oldImiSet ImiSet) (tagSlice []Ta
 						}
 						ch <- metadata
 					}(repo, tag, imageID, hubInfo, ch, errch)
+					if goCount > maxGoCount {
+						for ; goCount > minGoCount; goCount-- {
+							select {
+							case metadata := <-ch:
+								imi = append(imi, metadata)
+							case <-errch:
+								continue
+								// blog.Error(err, ":getImageMetadata")
+							}
+						}
+					}
 				}
 			}
 		}
-		for i := 0; i < goCount; i++ {
+		for ; goCount > 0; goCount-- {
 			select {
 			case metadata := <-ch:
 				imi = append(imi, metadata)
@@ -716,8 +738,19 @@ func getImageMetadata(tagSlice []TagInfo, oldImiSet ImiSet) (imi []ImageMetadata
 			}
 			ch <- metadata
 		}(imageID, ch, errch)
+
+		if goCount > maxGoCount {
+			for ; goCount > minGoCount; goCount-- {
+				select {
+				case metadata := <-ch:
+					imi = append(imi, metadata)
+				case err := <-errch:
+					blog.Error(err, ":getImageMetadata")
+				}
+			}
+		}
 	}
-	for i := 0; i < goCount; i++ {
+	for ; goCount > 0; goCount-- {
 		select {
 		case metadata := <-ch:
 			imi = append(imi, metadata)

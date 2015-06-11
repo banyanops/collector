@@ -208,7 +208,7 @@ func createContainer(containerSpec []byte) (containerID string, err error) {
 	apipath := "/containers/create"
 	resp, err := doDockerAPI(DockerTransport, "POST", apipath, containerSpec, "")
 	if err != nil {
-		blog.Error(err, ": Error in Remote Docker API call: ", apipath)
+		blog.Error(err, ": Error in Remote Docker API call: ", apipath, string(containerSpec))
 		return
 	}
 	blog.Debug("Response from docker remote API call for create: " + string(resp))
@@ -293,6 +293,7 @@ func removeContainer(containerID string) (resp []byte, err error) {
 	apipath := "/containers/" + containerID
 	resp, err = doDockerAPI(DockerTransport, "DELETE", apipath, []byte{}, "")
 	if err != nil {
+		blog.Error(err)
 		return
 	}
 	blog.Debug("Response from docker remote API call for remove: " + string(resp))

@@ -56,6 +56,9 @@ func (sh ScriptInfo) Run(imageID ImageIDType) (b []byte, err error) {
 		return
 	}
 	blog.Debug("New container ID: %s", containerID)
+
+	defer removeContainer(containerID)
+
 	jsonString, err = startContainer(containerID)
 	if err != nil {
 		blog.Error(err, ": Error in starting container")
@@ -76,11 +79,13 @@ func (sh ScriptInfo) Run(imageID ImageIDType) (b []byte, err error) {
 		blog.Error(err, ":Error in extracting output from container")
 		return
 	}
-	_, err = removeContainer(containerID)
-	if err != nil {
-		blog.Error(err, ":Error in removing container for image", containerID)
-		return
-	}
+	/*
+		_, err = removeContainer(containerID)
+		if err != nil {
+			blog.Error(err, ":Error in removing container for image", containerID)
+			return
+		}
+	*/
 	return
 }
 
