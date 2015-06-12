@@ -5,6 +5,7 @@ package collector
 import (
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 
 	config "github.com/banyanops/collector/config"
@@ -68,8 +69,17 @@ func RemoveImages(PulledImages []ImageMetadataInfo, imageToMDMap map[string][]Im
 	return
 }
 
-// doHTTPGet performs an HTTP GET operation and returns the response.
-func doHTTPGet(client *http.Client, URL, basicAuth string) (response []byte, e error) {
+type HTTPStatusCodeError struct {
+	error
+	StatusCode int
+}
+
+func (s *HTTPStatusCodeError) Error() string {
+	return "HTTP Status Code " + strconv.Itoa(s.StatusCode)
+}
+
+// RegistryQuery performs an HTTP GET operation from the registry and returns the response.
+func RegistryQuery(client *http.Client, URL, basicAuth string) (response []byte, e error) {
 	req, e := http.NewRequest("GET", URL, nil)
 	if e != nil {
 		return nil, e
@@ -82,6 +92,10 @@ func doHTTPGet(client *http.Client, URL, basicAuth string) (response []byte, e e
 		return nil, e
 	}
 	defer r.Body.Close()
+	if r.StatusCode < 200 || r.StatusCode > 299 {
+		e = &HTTPStatusCodeError{StatusCode: r.StatusCode}
+		return
+	}
 	response, e = ioutil.ReadAll(r.Body)
 	if e != nil {
 		return

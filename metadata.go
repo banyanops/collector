@@ -290,30 +290,16 @@ func getRepos() (repoSlice []RepoType, err error) {
 	}
 
 	// a query with an empty query string returns all the repos
-	req, err := http.NewRequest("GET", RegistryAPIURL+"/v1/search?q=", nil)
-	if err != nil {
-		blog.Error(err, ":getRepos NewRequest")
-		return
-	}
-	if BasicAuth != "" {
-		req.Header.Set("Authorization", "Basic "+BasicAuth)
-	}
 	client := &http.Client{}
-	r, err := client.Do(req)
+	response, err := RegistryQuery(client, RegistryAPIURL+"/v1/search?q=", BasicAuth)
 	if err != nil {
-		blog.Error(err, ":getRepos client.Do")
+		blog.Error(err)
+		if s, ok := err.(*HTTPStatusCodeError); ok {
+			blog.Error("HTTP bad status code %d from registry %s using --registryhttps=%v --registryauth=%v --registryproto=%s", s.StatusCode, RegistryAPIURL, *HTTPSRegistry, *AuthRegistry, *RegistryProto)
+		}
 		return
 	}
-	defer r.Body.Close()
-	if r.StatusCode != 200 {
-		blog.Error("HTTP bad status code %d from registry %s using --registryhttps=%v --registryauth=%v --registryproto=%s", r.StatusCode, RegistryAPIURL, *HTTPSRegistry, *AuthRegistry, *RegistryProto)
-		return
-	}
-	response, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		blog.Error(err, "ReadAll")
-		return
-	}
+
 	// parse the JSON response body and populate repo slice
 	var result registrySearchResult
 	if err = json.Unmarshal(response, &result); err != nil {
@@ -380,26 +366,14 @@ func v1GetTags(repoSlice []RepoType) (tagSlice []TagInfo, e error) {
 	client := &http.Client{}
 	for _, repo := range repoSlice {
 		// get tags for one repo
-		req, e := http.NewRequest("GET", RegistryAPIURL+"/v1/repositories/"+string(repo)+"/tags", nil)
-		if e != nil {
-			return nil, e
-		}
-		if BasicAuth != "" {
-			req.Header.Set("Authorization", "Basic "+BasicAuth)
-		}
-		r, e := client.Do(req)
-		if e != nil {
-			return nil, e
-		}
-		defer r.Body.Close()
-		if r.StatusCode != 200 {
-			blog.Error("Skipping Repo: %s, tag lookup status code %d", string(repo), r.StatusCode)
-			continue
-		}
-		response, e := ioutil.ReadAll(r.Body)
-		blog.Debug(string(response))
-		if e != nil {
-			return nil, e
+		response, err := RegistryQuery(client, RegistryAPIURL+"/v1/repositories/"+string(repo)+"/tags", BasicAuth)
+		if err != nil {
+			blog.Error(err)
+			if s, ok := err.(*HTTPStatusCodeError); ok {
+				blog.Error("Skipping Repo: %s, tag lookup status code %d", string(repo), s.StatusCode)
+				continue
+			}
+			return
 		}
 		//parse JSON output
 		var m map[TagType]ImageIDType
@@ -427,26 +401,13 @@ type V2Manifest struct {
 }
 
 func v2GetMetadata(client *http.Client, repo, tag string) (metadata ImageMetadataInfo, e error) {
-	req, e := http.NewRequest("GET", RegistryAPIURL+"/v2/"+repo+"/manifests/"+tag, nil)
-	if e != nil {
-		return
-	}
-	if BasicAuth != "" {
-		req.Header.Set("Authorization", "Basic "+BasicAuth)
-	}
-	r, e := client.Do(req)
-	if e != nil {
-		return
-	}
-	defer r.Body.Close()
-	if r.StatusCode != 200 {
-		blog.Error("Skipping Repo: %s, tag lookup status code %d", string(repo), r.StatusCode)
-		e = errors.New("Status code " + strconv.Itoa(r.StatusCode))
-		return
-	}
-	response, e := ioutil.ReadAll(r.Body)
-	blog.Debug(string(response))
-	if e != nil {
+	response, err := RegistryQuery(client, RegistryAPIURL+"/v2/"+repo+"/manifests/"+tag, BasicAuth)
+	if err != nil {
+		blog.Error(err)
+		if s, ok := err.(*HTTPStatusCodeError); ok {
+			blog.Error("Skipping Repo: %s, tag lookup status code %d", string(repo), s.StatusCode)
+			e = err
+		}
 		return
 	}
 	//parse JSON output
@@ -585,29 +546,47 @@ func getTagsMetadataHub(hubInfoSlice []HubInfo, oldImiSet ImiSet) (tagSlice []Ta
 	return
 }
 
+// RegistryRequestWithToken queries a Docker Registry that accepts Authorization: Token
+// headers with token values obtained from a Docker Index, e.g., Docker Hub.
+func RegistryRequestWithToken(client *http.Client, URL string, basicAuth string, dockerToken string) (response []byte, e error) {
+	var req *http.Request
+	req, e = http.NewRequest("GET", URL, nil)
+	if e != nil {
+		blog.Error(e)
+		return
+	}
+	req.Header.Set("Authorization", "Token "+dockerToken)
+	var r *http.Response
+	r, e = client.Do(req)
+	if e != nil {
+		blog.Error(e)
+		return
+	}
+	defer r.Body.Close()
+	if r.StatusCode != 200 {
+		e = &HTTPStatusCodeError{StatusCode: r.StatusCode}
+		return
+	}
+	response, e = ioutil.ReadAll(r.Body)
+	if e != nil {
+		blog.Error(e)
+		return
+	}
+	return
+}
+
 // lookupTagsHub accesses the registries pointed to by Docker Hub and returns tag and image info
 // for each specified repository.
 func lookupTagsHub(info HubInfo) (tagSlice []TagInfo, e error) {
 	client := &http.Client{}
 	URL := "https://" + info.RegistryURL + "/v1/repositories/" + string(info.Repo) + "/tags"
-	//log.Print(URL)
-	var req *http.Request
-	req, e = http.NewRequest("GET", URL, nil)
-	req.Header.Set("Authorization", "Token "+info.DockerToken)
-	var r *http.Response
-	r, e = client.Do(req)
+	response, e := RegistryRequestWithToken(client, URL, BasicAuth, info.DockerToken)
 	if e != nil {
-		return
-	}
-	defer r.Body.Close()
-	if r.StatusCode != 200 {
-		e = errors.New("Skipping Repo: " + string(info.Repo) + "tag lookup status code:" +
-			strconv.Itoa(r.StatusCode))
-		return
-	}
-	var response []byte
-	response, e = ioutil.ReadAll(r.Body)
-	if e != nil {
+		blog.Error(e)
+		if s, ok := e.(*HTTPStatusCodeError); ok {
+			e = errors.New("Skipping Repo: " + string(info.Repo) + "tag lookup status code:" +
+				strconv.Itoa(s.StatusCode))
+		}
 		return
 	}
 	//parse JSON output
@@ -629,27 +608,11 @@ func lookupMetadataHub(repo RepoType, tag TagType, imageID ImageIDType, hubInfo 
 
 	blog.Info("Get Metadata for Image: %s", string(imageID))
 	client := &http.Client{}
-	var req *http.Request
 	URL := "https://" + hubInfo.RegistryURL + "/v1/images/" + string(imageID) + "/json"
-	req, e = http.NewRequest("GET", URL, nil)
-	// log.Print("metadata query to: ", URL)
-	tokenString := "Token " + hubInfo.DockerToken
-	req.Header.Set("Authorization", tokenString)
-	// log.Print("Authorization:", tokenString)
-	var r *http.Response
-	r, e = client.Do(req)
+	response, e := RegistryRequestWithToken(client, URL, BasicAuth, hubInfo.DockerToken)
 	if e != nil {
-		return
-	}
-	defer r.Body.Close()
-	if r.StatusCode != 200 {
-		e = errors.New("Unable to query metadata for Repo: " + string(repo) +
-			"Tag: " + string(tag) + " Image: " + string(imageID))
-		return
-	}
-	var response []byte
-	response, e = ioutil.ReadAll(r.Body)
-	if e != nil {
+		blog.Error(e, "Unable to query metadata for Repo: "+string(repo)+
+			"Tag: "+string(tag)+" Image: "+string(imageID))
 		return
 	}
 	// log.Print("metadata query response: " + string(response))
@@ -760,28 +723,13 @@ func v2GetTagsMetadata(repoSlice []RepoType) (tagSlice []TagInfo, imi []ImageMet
 	client := &http.Client{}
 	for _, repo := range repoSlice {
 		// get tags for one repo
-		var req *http.Request
-		req, e = http.NewRequest("GET", RegistryAPIURL+"/v2/"+string(repo)+"/tags/list", nil)
-		if e != nil {
-			return
-		}
-		if BasicAuth != "" {
-			req.Header.Set("Authorization", "Basic "+BasicAuth)
-		}
-		var r *http.Response
-		r, e = client.Do(req)
-		if e != nil {
-			return
-		}
-		defer r.Body.Close()
-		if r.StatusCode != 200 {
-			blog.Error("Skipping Repo: %s, tag lookup status code %d", string(repo), r.StatusCode)
-			continue
-		}
-		var response []byte
-		response, e = ioutil.ReadAll(r.Body)
-		blog.Debug(string(response))
-		if e != nil {
+		response, err := RegistryQuery(client, RegistryAPIURL+"/v2/"+string(repo)+"/tags/list", BasicAuth)
+		if err != nil {
+			blog.Error(err)
+			if s, ok := err.(*HTTPStatusCodeError); ok {
+				blog.Error("Skipping Repo: %s, tag lookup status code %d", string(repo), s.StatusCode)
+				continue
+			}
 			return
 		}
 		//parse JSON output
@@ -860,7 +808,7 @@ func getImageMetadata(tagSlice []TagInfo, oldImiSet ImiSet) (imi []ImageMetadata
 				ch <- metadata
 				return
 			}
-			response, e := doHTTPGet(client, RegistryAPIURL+"/v1/images/"+string(imageID)+"/json", BasicAuth)
+			response, e := RegistryQuery(client, RegistryAPIURL+"/v1/images/"+string(imageID)+"/json", BasicAuth)
 			if e != nil {
 				errch <- e
 				return
