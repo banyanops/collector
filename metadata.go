@@ -3,6 +3,7 @@
 package collector
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -134,9 +135,9 @@ type registrySearchResult struct {
 	Results    []repo
 }
 
-// imageStruct records information returned by the registry to describe an image.
+// ImageStruct records information returned by the registry to describe an image.
 // This information gets copied to an object of type ImageMetadataInfo.
-type imageStruct struct {
+type ImageStruct struct {
 	ID       string
 	Parent   string
 	Checksum string
@@ -204,26 +205,39 @@ func GetImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo, imi []ImageMetadata
 			}
 		}
 
-		blog.Info("Get Tags")
-		// Now get a list of all the tags
-		tagSlice, e = getTags(repoSlice)
-		if e != nil {
-			blog.Warn(e, " getTags")
-			blog.Warn("Retrying")
-			time.Sleep(config.RETRYDURATION)
-			continue
-		}
+		// Now get a list of all the tags, and the image metadata/manifest
 
-		blog.Info("Get Image Metadata")
-		// Get image metadata
-		imi, e = getImageMetadata(tagSlice, oldImiSet)
-		if e != nil {
-			blog.Warn(e, " getImageMetadata")
-			blog.Warn("Retrying")
-			time.Sleep(config.RETRYDURATION)
-			continue
+		if *RegistryProto == "v1" {
+			blog.Info("Get Tags")
+			tagSlice, e = getTags(repoSlice)
+			if e != nil {
+				blog.Warn(e, " getTags")
+				blog.Warn("Retrying")
+				time.Sleep(config.RETRYDURATION)
+				continue
+			}
+
+			blog.Info("Get Image Metadata")
+			// Get image metadata
+			imi, e = getImageMetadata(tagSlice, oldImiSet)
+			if e != nil {
+				blog.Warn(e, " getImageMetadata")
+				blog.Warn("Retrying")
+				time.Sleep(config.RETRYDURATION)
+				continue
+			}
+			break
 		}
-		break
+		if *RegistryProto == "v2" {
+			tagSlice, imi, e = v2GetTagsMetadata(repoSlice)
+			if e != nil {
+				blog.Warn(e)
+				blog.Warn("Retrying")
+				time.Sleep(config.RETRYDURATION)
+				continue
+			}
+			break
+		}
 	}
 
 	return
@@ -271,7 +285,7 @@ func getRepos() (repoSlice []RepoType, err error) {
 	}
 
 	if *RegistryProto == "v2" {
-		blog.Info("v2 registry search/catalog interface not yet supported in collector")
+		blog.Error("v2 registry search/catalog interface not yet supported in collector")
 		return
 	}
 
@@ -356,8 +370,7 @@ func getReposHub() (hubInfo []HubInfo, err error) {
 	return
 }
 
-// getTags queries the Docker registry for the list of the tags for each repository.
-func getTags(repoSlice []RepoType) (tagSlice []TagInfo, e error) {
+func v1GetTags(repoSlice []RepoType) (tagSlice []TagInfo, e error) {
 	client := &http.Client{}
 	for _, repo := range repoSlice {
 		// get tags for one repo
@@ -393,6 +406,85 @@ func getTags(repoSlice []RepoType) (tagSlice []TagInfo, e error) {
 		tagSlice = append(tagSlice, t)
 	}
 	return
+}
+
+type V2Tag struct {
+	Name string
+	Tags []string
+}
+
+type V1Compat struct {
+	V1Compatibility string
+}
+type V2Manifest struct {
+	History []V1Compat
+}
+
+func v2GetMetadata(client *http.Client, repo, tag string) (metadata ImageMetadataInfo, e error) {
+	req, e := http.NewRequest("GET", RegistryAPIURL+"/v2/"+repo+"/manifests/"+tag, nil)
+	if e != nil {
+		return
+	}
+	if BasicAuth != "" {
+		req.Header.Set("Authorization", "Basic "+BasicAuth)
+	}
+	r, e := client.Do(req)
+	if e != nil {
+		return
+	}
+	defer r.Body.Close()
+	if r.StatusCode != 200 {
+		blog.Error("Skipping Repo: %s, tag lookup status code %d", string(repo), r.StatusCode)
+		e = errors.New("Status code " + strconv.Itoa(r.StatusCode))
+		return
+	}
+	response, e := ioutil.ReadAll(r.Body)
+	blog.Debug(string(response))
+	if e != nil {
+		return
+	}
+	//parse JSON output
+	var m V2Manifest
+	b := bytes.NewBuffer(response)
+	if e = json.NewDecoder(b).Decode(&m); e != nil {
+		return
+	}
+	if len(m.History) == 0 {
+		e = errors.New("repo " + repo + ":" + tag + " no images found in history")
+		return
+	}
+	var image ImageStruct
+	if e = json.Unmarshal([]byte(m.History[0].V1Compatibility), &image); e != nil {
+		return
+	}
+	var creationTime time.Time
+	metadata.Image = image.ID
+	if creationTime, e = time.Parse(time.RFC3339Nano, image.Created); e != nil {
+		return
+	}
+	metadata.Datetime = creationTime
+	metadata.Repo = repo
+	metadata.Tag = tag
+	metadata.Size = image.Size
+	metadata.Author = image.Author
+	metadata.Checksum = image.Checksum
+	metadata.Comment = image.Comment
+	metadata.Parent = image.Parent
+	return
+}
+
+// getTags queries the Docker registry for the list of the tags for each repository.
+func getTags(repoSlice []RepoType) (tagSlice []TagInfo, e error) {
+	switch *RegistryProto {
+	case "v1", "quay":
+		return v1GetTags(repoSlice)
+	case "v2":
+		panic("Unreachable")
+	default:
+		blog.Error("Unknown registry protocol %s", *RegistryProto)
+		return
+	}
+	panic("Unreachable")
 }
 
 // getTagsMetadataHub takes Docker Hub auth and index info and uses it to query
@@ -555,7 +647,7 @@ func lookupMetadataHub(repo RepoType, tag TagType, imageID ImageIDType, hubInfo 
 		return
 	}
 	// log.Print("metadata query response: " + string(response))
-	var m imageStruct
+	var m ImageStruct
 	if e = json.Unmarshal(response, &m); e != nil {
 		return
 	}
@@ -658,6 +750,54 @@ func RemoveObsoleteMetadata(obsolete []ImageMetadataInfo) {
 	return
 }
 
+func v2GetTagsMetadata(repoSlice []RepoType) (tagSlice []TagInfo, imi []ImageMetadataInfo, e error) {
+	client := &http.Client{}
+	for _, repo := range repoSlice {
+		// get tags for one repo
+		var req *http.Request
+		req, e = http.NewRequest("GET", RegistryAPIURL+"/v2/"+string(repo)+"/tags/list", nil)
+		if e != nil {
+			return
+		}
+		if BasicAuth != "" {
+			req.Header.Set("Authorization", "Basic "+BasicAuth)
+		}
+		var r *http.Response
+		r, e = client.Do(req)
+		if e != nil {
+			return
+		}
+		defer r.Body.Close()
+		if r.StatusCode != 200 {
+			blog.Error("Skipping Repo: %s, tag lookup status code %d", string(repo), r.StatusCode)
+			continue
+		}
+		var response []byte
+		response, e = ioutil.ReadAll(r.Body)
+		blog.Debug(string(response))
+		if e != nil {
+			return
+		}
+		//parse JSON output
+		var m V2Tag
+		if e = json.Unmarshal(response, &m); e != nil {
+			return
+		}
+		t := TagInfo{Repo: repo, TagMap: make(map[TagType]ImageIDType)}
+		for _, tag := range m.Tags {
+			metadata, e := v2GetMetadata(client, string(repo), tag)
+			if e != nil {
+				blog.Error(e, ":Unable to get metadata for repo", string(repo), "tag", tag)
+				continue
+			}
+			t.TagMap[TagType(tag)] = ImageIDType(metadata.Image)
+			imi = append(imi, metadata)
+		}
+		tagSlice = append(tagSlice, t)
+	}
+	return
+}
+
 // getImageMetadata queries the Docker registry for info about each image.
 func getImageMetadata(tagSlice []TagInfo, oldImiSet ImiSet) (imi []ImageMetadataInfo, e error) {
 
@@ -719,7 +859,7 @@ func getImageMetadata(tagSlice []TagInfo, oldImiSet ImiSet) (imi []ImageMetadata
 				errch <- e
 				return
 			}
-			var m imageStruct
+			var m ImageStruct
 			if e = json.Unmarshal(response, &m); e != nil {
 				errch <- e
 				return
