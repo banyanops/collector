@@ -305,13 +305,19 @@ func getRepos() (repoSlice []RepoType, err error) {
 		return
 	}
 	defer r.Body.Close()
+	if r.StatusCode != 200 {
+		blog.Error("HTTP bad status code %d from registry %s using --registryhttps=%v --registryauth=%v --registryproto=%s", r.StatusCode, RegistryAPIURL, *HTTPSRegistry, *AuthRegistry, *RegistryProto)
+		return
+	}
 	response, err := ioutil.ReadAll(r.Body)
 	if err != nil {
+		blog.Error(err, "ReadAll")
 		return
 	}
 	// parse the JSON response body and populate repo slice
 	var result registrySearchResult
 	if err = json.Unmarshal(response, &result); err != nil {
+		blog.Error(err, "unmarshal", string(response))
 		return
 	}
 	for _, elem := range result.Results {
