@@ -58,30 +58,30 @@ func NewRepoSet() RepoSet {
 // DoIteration runs one iteration of the main loop to get new images, extract data from them,
 // and saves results.
 func DoIteration(ReposToLimit RepoSet, authToken string,
-	processedImages collector.ImageSet, oldImiSet collector.ImiSet,
-	PulledList []collector.ImageMetadataInfo) (currentImiSet collector.ImiSet,
+	processedImages collector.ImageSet, oldMetadataSet collector.MetadataSet,
+	PulledList []collector.ImageMetadataInfo) (currentMetadataSet collector.MetadataSet,
 	PulledNew []collector.ImageMetadataInfo) {
 	blog.Debug("DoIteration: processedImages is %v", processedImages)
 	PulledNew = PulledList
-	_ /*tagSlice*/, imi, currentImiSet := collector.GetNewImageMetadata(oldImiSet)
+	_ /*tagSlice*/, metadataSlice, currentMetadataSet := collector.GetNewImageMetadata(oldMetadataSet)
 
-	if len(imi) == 0 {
+	if len(metadataSlice) == 0 {
 		blog.Info("No new metadata in this iteration")
 		return
 	}
-	blog.Info("Obtained %d new metadata items in this iteration", len(imi))
-	collector.SaveImageMetadata(imi)
+	blog.Info("Obtained %d new metadata items in this iteration", len(metadataSlice))
+	collector.SaveImageMetadata(metadataSlice)
 
 	// number of images processed for each repository in this iteration
 	imageCount := make(map[collector.RepoType]int)
-	imageToMDMap := collector.GetImageToMDMap(imi)
+	imageToMDMap := collector.GetImageToMDMap(metadataSlice)
 
 	// Set of repos to stop limiting according to maxImages after this iteration completes.
 	StopLimiting := NewRepoSet()
 
 	for {
 		pulledImages := collector.NewImageSet()
-		for _, metadata := range imi {
+		for _, metadata := range metadataSlice {
 			if config.FilterRepos && !collector.ReposToProcess[collector.RepoType(metadata.Repo)] {
 				continue
 			}
@@ -274,14 +274,14 @@ func copyBanyanData() {
 	collector.CopyDirTree(config.COLLECTORDIR()+"/data/bin/*", collector.BinDir)
 }
 
-func InfLoop(authToken string, processedImages collector.ImageSet, ImiSet collector.ImiSet,
+func InfLoop(authToken string, processedImages collector.ImageSet, MetadataSet collector.MetadataSet,
 	PulledList []collector.ImageMetadataInfo) {
 	duration := time.Duration(*poll) * time.Second
 	reposToLimit := NewRepoSet()
 
 	for {
 		config.BanyanUpdate("New iteration")
-		ImiSet, PulledList = DoIteration(reposToLimit, authToken, processedImages, ImiSet, PulledList)
+		MetadataSet, PulledList = DoIteration(reposToLimit, authToken, processedImages, MetadataSet, PulledList)
 
 		blog.Info("Looping in %d seconds", *poll)
 		config.BanyanUpdate("Sleeping for", strconv.FormatInt(*poll, 10), "seconds")
@@ -327,9 +327,9 @@ func main() {
 	blog.Debug(processedImages)
 
 	// Image Metadata we have already seen
-	ImiSet := collector.NewImiSet()
+	MetadataSet := collector.NewMetadataSet()
 	PulledList := []collector.ImageMetadataInfo{}
 
 	// Main infinite loop.
-	InfLoop(authToken, processedImages, ImiSet, PulledList)
+	InfLoop(authToken, processedImages, MetadataSet, PulledList)
 }

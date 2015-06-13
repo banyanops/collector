@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-var imi []ImageMetadataInfo
+var metadataSlice []ImageMetadataInfo
 var tagSlice []TagInfo
 
 func TestMain(m *testing.M) {
@@ -115,16 +115,16 @@ func TestGetTagsMetadataHub(t *testing.T) {
 	if hubInfo == nil || len(hubInfo) == 0 {
 		t.Fatal("hubInfo is nil")
 	}
-	oldImiSet := NewImiSet()
-	tagSlice, imi, e := getTagsMetadataHub(hubInfo, oldImiSet)
+	oldMetadataSet := NewMetadataSet()
+	tagSlice, metadataSlice, e := getTagsMetadataHub(hubInfo, oldMetadataSet)
 	if e != nil {
 		t.Fatal(e)
 	}
 	if tagSlice == nil || len(tagSlice) == 0 {
 		t.Fatal("tagSlice", tagSlice)
 	}
-	if imi == nil || len(imi) == 0 {
-		t.Fatal("imi", imi)
+	if metadataSlice == nil || len(metadataSlice) == 0 {
+		t.Fatal("metadataSlice", metadataSlice)
 	}
 	fmt.Print(tagSlice)
 	return

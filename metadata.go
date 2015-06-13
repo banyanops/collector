@@ -63,37 +63,37 @@ type ImageMetadataInfo struct {
 	Parent   string
 }
 
-// ImiSet is a set of Image Metadata Info structures.
-type ImiSet map[ImageMetadataInfo]bool
+// MetadataSet is a set of Image Metadata Info structures.
+type MetadataSet map[ImageMetadataInfo]bool
 
-// ImageIMIMap maps image IDs to ImageMetadataInfo structs.
-type ImageIMIMap map[ImageIDType]ImageMetadataInfo
+// ImageToMetadataMap maps image IDs to ImageMetadataInfo structs.
+type ImageToMetadataMap map[ImageIDType]ImageMetadataInfo
 
-// NewImiSet creates a new ImiSet.
-func NewImiSet() ImiSet {
-	return ImiSet(make(map[ImageMetadataInfo]bool))
+// NewMetadataSet creates a new MetadataSet.
+func NewMetadataSet() MetadataSet {
+	return MetadataSet(make(map[ImageMetadataInfo]bool))
 }
 
-// NewImageIMIMap is a constructor for ImageIMIMap.
-func NewImageIMIMap() ImageIMIMap {
+// NewImageToMetadataMap is a constructor for ImageToMetadataMap.
+func NewImageToMetadataMap() ImageToMetadataMap {
 	return make(map[ImageIDType]ImageMetadataInfo)
 }
 
 // Insert adds an image ID to an Image ID Map.
-func (iim ImageIMIMap) Insert(imageID ImageIDType, imi ImageMetadataInfo) {
-	iim[imageID] = imi
+func (m ImageToMetadataMap) Insert(imageID ImageIDType, metadata ImageMetadataInfo) {
+	m[imageID] = metadata
 }
 
-// Exists checks whether an image ID is present in an ImageIMIMap.
-func (iim ImageIMIMap) Exists(imageID ImageIDType) bool {
-	_, ok := iim[imageID]
+// Exists checks whether an image ID is present in an ImageToMetadataMap.
+func (m ImageToMetadataMap) Exists(imageID ImageIDType) bool {
+	_, ok := m[imageID]
 	return ok
 }
 
-// Imi returns the ImageMetadataInfo corresponding to an image ID if that image
-// is present in the input ImageIMIMap.
-func (iim ImageIMIMap) Imi(imageID ImageIDType) (val ImageMetadataInfo, e error) {
-	val, ok := iim[imageID]
+// Metadata returns the ImageMetadataInfo corresponding to an image ID if that image
+// is present in the input ImageToMetadataMap.
+func (m ImageToMetadataMap) Metadata(imageID ImageIDType) (metadata ImageMetadataInfo, e error) {
+	metadata, ok := m[imageID]
 	if ok {
 		return
 	}
@@ -182,7 +182,7 @@ func GetImageToMDMap(imageMDs []ImageMetadataInfo) (imageToMDMap map[string][]Im
 // If the user has specified the repositories to examine, then no other repositories are examined.
 // If the user has not specified repositories, then the registry search API is used to
 // get the list of all repositories in the registry.
-func GetImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo, imi []ImageMetadataInfo) {
+func GetImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataSlice []ImageMetadataInfo) {
 	for {
 		blog.Info("Get Repos")
 		repoSlice, e := getRepos()
@@ -197,10 +197,10 @@ func GetImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo, imi []ImageMetadata
 			// seeing any repos in the registry.
 			// So, just reconstruct the list of repos that we saw earlier.
 			repomap := make(map[string]bool)
-			for imi := range oldImiSet {
-				if repomap[imi.Repo] == false {
-					repoSlice = append(repoSlice, RepoType(imi.Repo))
-					repomap[imi.Repo] = true
+			for metadata := range oldMetadataSet {
+				if repomap[metadata.Repo] == false {
+					repoSlice = append(repoSlice, RepoType(metadata.Repo))
+					repomap[metadata.Repo] = true
 				}
 			}
 		}
@@ -219,7 +219,7 @@ func GetImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo, imi []ImageMetadata
 
 			blog.Info("Get Image Metadata")
 			// Get image metadata
-			imi, e = getImageMetadata(tagSlice, oldImiSet)
+			metadataSlice, e = getImageMetadata(tagSlice, oldMetadataSet)
 			if e != nil {
 				blog.Warn(e, " getImageMetadata")
 				blog.Warn("Retrying")
@@ -229,7 +229,7 @@ func GetImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo, imi []ImageMetadata
 			break
 		}
 		if *RegistryProto == "v2" {
-			tagSlice, imi, e = v2GetTagsMetadata(repoSlice)
+			tagSlice, metadataSlice, e = v2GetTagsMetadata(repoSlice)
 			if e != nil {
 				blog.Warn(e)
 				blog.Warn("Retrying")
@@ -247,7 +247,7 @@ func GetImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo, imi []ImageMetadata
 // The user must have specified a set of repositories of interest.
 // The function queries Docker Hub as an index to the registries, and then retrieves
 // information directly from the registries, using Docker Hub authentication tokens.
-func GetImageMetadataHub(oldImiSet ImiSet) (tagSlice []TagInfo, imi []ImageMetadataInfo) {
+func GetImageMetadataHub(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataSlice []ImageMetadataInfo) {
 	for {
 		blog.Info("Get Repos from Docker Hub")
 		hubInfoSlice, e := getReposHub()
@@ -260,7 +260,7 @@ func GetImageMetadataHub(oldImiSet ImiSet) (tagSlice []TagInfo, imi []ImageMetad
 
 		blog.Info("Get Tags and Metadata from Docker Hub")
 		// Now get a list of all the tags
-		tagSlice, imi, e = getTagsMetadataHub(hubInfoSlice, oldImiSet)
+		tagSlice, metadataSlice, e = getTagsMetadataHub(hubInfoSlice, oldMetadataSet)
 		if e != nil {
 			blog.Warn(e, " getTagsMetadataHub")
 			blog.Warn("Retrying")
@@ -456,8 +456,8 @@ func getTags(repoSlice []RepoType) (tagSlice []TagInfo, e error) {
 
 // getTagsMetadataHub takes Docker Hub auth and index info and uses it to query
 // registries for the tags and metadata for each repository.
-func getTagsMetadataHub(hubInfoSlice []HubInfo, oldImiSet ImiSet) (tagSlice []TagInfo,
-	imi []ImageMetadataInfo, e error) {
+func getTagsMetadataHub(hubInfoSlice []HubInfo, oldMetadataSet MetadataSet) (tagSlice []TagInfo,
+	metadataSlice []ImageMetadataInfo, e error) {
 
 	// populate map from ImageID to HubInfo (docker hub token)
 	hubInfoMap := NewHubInfoMap()
@@ -466,11 +466,11 @@ func getTagsMetadataHub(hubInfoSlice []HubInfo, oldImiSet ImiSet) (tagSlice []Ta
 	}
 
 	// populate map from ImageID to Image Metadata Info
-	imimap := NewImageIMIMap()
+	metadataMap := NewImageToMetadataMap()
 	previousImages := NewImageSet()
-	for imi := range oldImiSet {
-		imimap.Insert(ImageIDType(imi.Image), imi)
-		previousImages[ImageIDType(imi.Image)] = true
+	for metadata := range oldMetadataSet {
+		metadataMap.Insert(ImageIDType(metadata.Image), metadata)
+		previousImages[ImageIDType(metadata.Image)] = true
 	}
 
 	// get tag and image metadata info
@@ -495,12 +495,12 @@ func getTagsMetadataHub(hubInfoSlice []HubInfo, oldImiSet ImiSet) (tagSlice []Ta
 			tagmap := repotag.TagMap
 			for tag, imageID := range tagmap {
 				var curr ImageMetadataInfo
-				if imimap.Exists(imageID) {
+				if metadataMap.Exists(imageID) {
 					// copy previous entry and fill in this repo/tag
-					curr, _ = imimap.Imi(imageID)
+					curr, _ = metadataMap.Metadata(imageID)
 					curr.Repo = string(repo)
 					curr.Tag = string(tag)
-					imi = append(imi, curr)
+					metadataSlice = append(metadataSlice, curr)
 				} else {
 					// create a new entry, and determine field values
 					// by querying the registry
@@ -523,7 +523,7 @@ func getTagsMetadataHub(hubInfoSlice []HubInfo, oldImiSet ImiSet) (tagSlice []Ta
 						for ; goCount > minGoCount; goCount-- {
 							select {
 							case metadata := <-ch:
-								imi = append(imi, metadata)
+								metadataSlice = append(metadataSlice, metadata)
 							case <-errch:
 								continue
 								// blog.Error(err, ":getImageMetadata")
@@ -536,7 +536,7 @@ func getTagsMetadataHub(hubInfoSlice []HubInfo, oldImiSet ImiSet) (tagSlice []Ta
 		for ; goCount > 0; goCount-- {
 			select {
 			case metadata := <-ch:
-				imi = append(imi, metadata)
+				metadataSlice = append(metadataSlice, metadata)
 			case <-errch:
 				continue
 				// blog.Error(err, ":getImageMetadata")
@@ -604,7 +604,7 @@ func lookupTagsHub(info HubInfo) (tagSlice []TagInfo, e error) {
 // lookupMetadataHub takes as input matching repo, tag, imageID, and Docker Hub auth/index info,
 // and it returns ImageMetadataInfo for that image by querying the indexed registry.
 func lookupMetadataHub(repo RepoType, tag TagType, imageID ImageIDType, hubInfo HubInfo) (
-	imi ImageMetadataInfo, e error) {
+	metadata ImageMetadataInfo, e error) {
 
 	blog.Info("Get Metadata for Image: %s", string(imageID))
 	client := &http.Client{}
@@ -621,51 +621,51 @@ func lookupMetadataHub(repo RepoType, tag TagType, imageID ImageIDType, hubInfo 
 		return
 	}
 	var creationTime time.Time
-	imi.Image = string(imageID)
+	metadata.Image = string(imageID)
 	if creationTime, e = time.Parse(time.RFC3339Nano, m.Created); e != nil {
 		return
 	}
-	imi.Datetime = creationTime
-	imi.Repo = string(repo)
-	imi.Tag = string(tag)
-	imi.Size = m.Size
-	imi.Author = m.Author
-	imi.Checksum = m.Checksum
-	imi.Comment = m.Comment
-	imi.Parent = m.Parent
+	metadata.Datetime = creationTime
+	metadata.Repo = string(repo)
+	metadata.Tag = string(tag)
+	metadata.Size = m.Size
+	metadata.Author = m.Author
+	metadata.Checksum = m.Checksum
+	metadata.Comment = m.Comment
+	metadata.Parent = m.Parent
 	return
 }
 
 // GetNewImageMetadata takes the set of existing images, queries the registry to find any changes,
 // and then brings the Output Writer up to date by telling it the obsolete metadata to delete
 // and the new metadata to add.
-func GetNewImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo,
-	imi []ImageMetadataInfo, currentImiSet ImiSet) {
+func GetNewImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo,
+	metadataSlice []ImageMetadataInfo, currentMetadataSet MetadataSet) {
 
-	var currentImi []ImageMetadataInfo
+	var currentMetadataSlice []ImageMetadataInfo
 	//config.BanyanUpdate("Loading Registry Metadata")
 	switch {
 	case HubAPI == false:
-		tagSlice, currentImi = GetImageMetadata(oldImiSet)
+		tagSlice, currentMetadataSlice = GetImageMetadata(oldMetadataSet)
 	case HubAPI == true:
-		tagSlice, currentImi = GetImageMetadataHub(oldImiSet)
+		tagSlice, currentMetadataSlice = GetImageMetadataHub(oldMetadataSet)
 	}
 
-	// get only the new IMIs from currentImi
-	currentImiSet = NewImiSet()
-	for _, metadata := range currentImi {
-		currentImiSet[metadata] = true
-		if _, ok := oldImiSet[metadata]; !ok {
+	// get only the new metadata from currentMetadataSlice
+	currentMetadataSet = NewMetadataSet()
+	for _, metadata := range currentMetadataSlice {
+		currentMetadataSet[metadata] = true
+		if _, ok := oldMetadataSet[metadata]; !ok {
 			// metadata is not in old map
-			imi = append(imi, metadata)
+			metadataSlice = append(metadataSlice, metadata)
 		}
 	}
 
 	// find entries in the old map that are not in the current map,
 	// and remove those entries from the database
 	obsolete := []ImageMetadataInfo{}
-	for metadata := range oldImiSet {
-		if _, ok := currentImiSet[metadata]; !ok {
+	for metadata := range oldMetadataSet {
+		if _, ok := currentMetadataSet[metadata]; !ok {
 			if len(ReposToProcess) > 0 {
 				if _, present := ReposToProcess[RepoType(metadata.Repo)]; present {
 					obsolete = append(obsolete, metadata)
@@ -681,21 +681,21 @@ func GetNewImageMetadata(oldImiSet ImiSet) (tagSlice []TagInfo,
 		RemoveObsoleteMetadata(obsolete)
 	}
 
-	if len(imi) > 0 || len(obsolete) > 0 {
+	if len(metadataSlice) > 0 || len(obsolete) > 0 {
 		config.BanyanUpdate("Detected changes in registry metadata")
 	}
 
 	// Sort image metadata from newest image to oldest image
-	sort.Sort(ByDateTime(imi))
+	sort.Sort(ByDateTime(metadataSlice))
 	return
 }
 
 const maxStatusLen = 100
 
-func statusMessageMD(imi []ImageMetadataInfo) string {
+func statusMessageMD(metadataSlice []ImageMetadataInfo) string {
 	statString := ""
-	for _, md := range imi {
-		statString += md.Repo + ":" + md.Tag + ", "
+	for _, metadata := range metadataSlice {
+		statString += metadata.Repo + ":" + metadata.Tag + ", "
 		if len(statString) > maxStatusLen {
 			return statString[0:maxStatusLen]
 		}
@@ -719,7 +719,7 @@ func RemoveObsoleteMetadata(obsolete []ImageMetadataInfo) {
 	return
 }
 
-func v2GetTagsMetadata(repoSlice []RepoType) (tagSlice []TagInfo, imi []ImageMetadataInfo, e error) {
+func v2GetTagsMetadata(repoSlice []RepoType) (tagSlice []TagInfo, metadataSlice []ImageMetadataInfo, e error) {
 	client := &http.Client{}
 	for _, repo := range repoSlice {
 		// get tags for one repo
@@ -745,7 +745,7 @@ func v2GetTagsMetadata(repoSlice []RepoType) (tagSlice []TagInfo, imi []ImageMet
 				continue
 			}
 			t.TagMap[TagType(tag)] = ImageIDType(metadata.Image)
-			imi = append(imi, metadata)
+			metadataSlice = append(metadataSlice, metadata)
 		}
 		tagSlice = append(tagSlice, t)
 	}
@@ -753,13 +753,13 @@ func v2GetTagsMetadata(repoSlice []RepoType) (tagSlice []TagInfo, imi []ImageMet
 }
 
 // getImageMetadata queries the Docker registry for info about each image.
-func getImageMetadata(tagSlice []TagInfo, oldImiSet ImiSet) (imi []ImageMetadataInfo, e error) {
+func getImageMetadata(tagSlice []TagInfo, oldMetadataSet MetadataSet) (metadataSlice []ImageMetadataInfo, e error) {
 
-	imimap := NewImageIMIMap()
+	metadataMap := NewImageToMetadataMap()
 	previousImages := NewImageSet()
-	for imi := range oldImiSet {
-		imimap.Insert(ImageIDType(imi.Image), imi)
-		previousImages[ImageIDType(imi.Image)] = true
+	for metadata := range oldMetadataSet {
+		metadataMap.Insert(ImageIDType(metadata.Image), metadata)
+		previousImages[ImageIDType(metadata.Image)] = true
 	}
 
 	// get map from each imageID to all of its aliases (repo+tag)
@@ -776,7 +776,7 @@ func getImageMetadata(tagSlice []TagInfo, oldImiSet ImiSet) (imi []ImageMetadata
 		}
 	}
 
-	// for each alias, create an entry in imi
+	// for each alias, create an entry in metadataSlice
 	ch := make(chan ImageMetadataInfo)
 	errch := make(chan error)
 	goCount := 0
@@ -787,12 +787,12 @@ func getImageMetadata(tagSlice []TagInfo, oldImiSet ImiSet) (imi []ImageMetadata
 			// We already know this image's metadata, but we need to record
 			// its current repo:tag aliases.
 			var e error
-			curr, e = imimap.Imi(imageID)
+			curr, e = metadataMap.Metadata(imageID)
 			if e != nil {
-				blog.Error(e, "imageID", string(imageID), "not in imimap")
+				blog.Error(e, "imageID", string(imageID), "not in metadataMap")
 				continue
 			}
-			imi = append(imi, curr)
+			metadataSlice = append(metadataSlice, curr)
 			continue
 		}
 
@@ -837,7 +837,7 @@ func getImageMetadata(tagSlice []TagInfo, oldImiSet ImiSet) (imi []ImageMetadata
 			for ; goCount > minGoCount; goCount-- {
 				select {
 				case metadata := <-ch:
-					imi = append(imi, metadata)
+					metadataSlice = append(metadataSlice, metadata)
 				case err := <-errch:
 					blog.Error(err, ":getImageMetadata")
 				}
@@ -847,40 +847,40 @@ func getImageMetadata(tagSlice []TagInfo, oldImiSet ImiSet) (imi []ImageMetadata
 	for ; goCount > 0; goCount-- {
 		select {
 		case metadata := <-ch:
-			imi = append(imi, metadata)
+			metadataSlice = append(metadataSlice, metadata)
 		case err := <-errch:
 			blog.Error(err, ":getImageMetadata")
 		}
 	}
 
-	// fill in the repo and tag fields of imi, replicating entries for multiple aliases to an image
-	finalImi := []ImageMetadataInfo{}
-	for _, md := range imi {
-		for _, repotag := range imageMap[ImageIDType(md.Image)] {
-			newmd := md
+	// fill in the repo and tag fields of metadataSlice, replicating entries for multiple aliases to an image
+	finalMetadataSlice := []ImageMetadataInfo{}
+	for _, metadata := range metadataSlice {
+		for _, repotag := range imageMap[ImageIDType(metadata.Image)] {
+			newmd := metadata
 			// fill in the repo and tag
 			// _ = repotag
 			newmd.Repo = string(repotag.Repo)
 			newmd.Tag = string(repotag.Tag)
-			finalImi = append(finalImi, newmd)
+			finalMetadataSlice = append(finalMetadataSlice, newmd)
 		}
 	}
-	imi = finalImi
+	metadataSlice = finalMetadataSlice
 	return
 }
 
 // SaveImageMetadata saves image metadata to selected storage location
 // (standard output, Banyan service, etc.).
-func SaveImageMetadata(imi []ImageMetadataInfo) {
-	if len(imi) == 0 {
+func SaveImageMetadata(metadataSlice []ImageMetadataInfo) {
+	if len(metadataSlice) == 0 {
 		blog.Warn("No image metadata to save!")
 		return
 	}
 
-	config.BanyanUpdate("Save Image Metadata", statusMessageMD(imi))
+	config.BanyanUpdate("Save Image Metadata", statusMessageMD(metadataSlice))
 
 	for _, writer := range WriterList {
-		writer.AppendImageMetadata(imi)
+		writer.AppendImageMetadata(metadataSlice)
 	}
 
 	return
