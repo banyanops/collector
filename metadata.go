@@ -196,6 +196,7 @@ func GetImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataS
 			// For some reason (like, registry search doesn't work), we are not
 			// seeing any repos in the registry.
 			// So, just reconstruct the list of repos that we saw earlier.
+			blog.Warn("Empty repoSlice, reusing previous metadata")
 			repomap := make(map[string]bool)
 			for metadata := range oldMetadataSet {
 				if repomap[metadata.Repo] == false {
@@ -229,6 +230,7 @@ func GetImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataS
 			break
 		}
 		if *RegistryProto == "v2" {
+			blog.Info("Get Tags and Metadata")
 			tagSlice, metadataSlice, e = v2GetTagsMetadata(repoSlice)
 			if e != nil {
 				blog.Warn(e)
