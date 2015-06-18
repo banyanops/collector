@@ -146,6 +146,5 @@ func getAuthConfig(user, password, auth, email, registry string) (authConfig str
 	dst := make([]byte, base64.URLEncoding.EncodedLen(len(jsonString)))
 	base64.URLEncoding.Encode(dst, jsonString)
 	authConfig = string(dst)
-	blog.Info("authconfig is %s", authConfig)
 	return
 }
