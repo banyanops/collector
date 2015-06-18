@@ -46,28 +46,11 @@ var (
 	// Dests is setup as a flag when main calls DefineDestsFlag().
 	Dests *string
 
-	// UpdateCh is a channel used to pass in new configuration info to Collector.
-	UpdateCh = make(chan CollectorConfigUpdate)
-
 	// BanyanUpdate is a function to log interesting updates as collector execution proceeds.
 	BanyanUpdate BanyanUpdateFunc = func(status ...string) {}
 )
 
 type BanyanUpdateFunc func(status ...string)
-
-type CollectorConfigUpdate struct {
-	CollectorConfig
-	Update bool
-}
-
-// CollectorConfig is message sent to Collector
-type CollectorConfig struct {
-	RegName          string
-	RegAuth          bool
-	RegHTTPS         bool
-	RepoList         []string
-	MaxPulledPerRepo int // Maximum number of new images that get pulled per repo
-}
 
 // DefineDestsFlag is called by the importing package, e.g., main, to create the dests flag.
 func DefineDestsFlag(def string) {

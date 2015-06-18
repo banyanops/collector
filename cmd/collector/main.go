@@ -4,7 +4,6 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -185,21 +184,6 @@ func persistImageList(collectedImages collector.ImageSet) (e error) {
 		}
 	}
 	return
-}
-
-func printExampleUsage() {
-	fmt.Fprintf(os.Stderr, "\n  Examples:\n")
-	fmt.Fprintf(os.Stderr, "  (a) Running when compiled from source (standalone mode):\n")
-	fmt.Fprintf(os.Stderr, "  \tcd <COLLECTOR_SOURCE_DIR>\n")
-	fmt.Fprintf(os.Stderr, "  \tsudo COLLECTOR_DIR=$PWD $GOPATH/bin/collector index.docker.io banyanops/nginx\n\n")
-	fmt.Fprintf(os.Stderr, "  (b) Running inside a Docker container: \n")
-	fmt.Fprintf(os.Stderr, "  \tsudo docker run --rm \\ \n")
-	fmt.Fprintf(os.Stderr, "  \t\t-v ~/.dockercfg:/root/.dockercfg \\ \n")
-	fmt.Fprintf(os.Stderr, "  \t\t-v /var/run/docker.sock:/var/run/docker.sock \\ \n")
-	fmt.Fprintf(os.Stderr, "  \t\t-v $HOME/.banyan:/banyandir \\ \n")
-	fmt.Fprintf(os.Stderr, "  \t\t-v <USER_SCRIPTS_DIR>:/banyancollector/data/userscripts \\ \n")
-	fmt.Fprintf(os.Stderr, "  \t\t-e BANYAN_HOST_DIR=$HOME/.banyan \\ \n")
-	fmt.Fprintf(os.Stderr, "  \t\tbanyanops/collector index.docker.io banyanops/nginx\n\n")
 }
 
 // checkRepoList gets the list of repositories to process from the command line
