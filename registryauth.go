@@ -31,9 +31,16 @@ var (
 	XRegistryAuth string
 	// BasicAuth is the base64-encoded Auth field read from $HOME/.dockercfg
 	BasicAuth string
+	// DockerConfig is the name of the config file containing registry authentication information.
+	DockerConfig string
 )
 
-// DockerAuthSet contains authentication info parsed from $HOME/.dockercfg
+// DockerConfigJSON is used to decode $HOME/.docker/config.json
+type DockerConfigJSON struct {
+	Auths DockerAuthSet
+}
+
+// DockerAuthSet contains authentication info parsed from $HOME/.dockercfg or $HOME/.docker/config.json
 type DockerAuthSet map[string]DockerAuth
 type DockerAuth struct {
 	Auth  string
@@ -46,7 +53,7 @@ func GetRegistryURL() (URL string, hubAPI bool, BasicAuth string, XRegistryAuth 
 	basicAuth, fullRegistry, XRegistryAuth := RegAuth(RegistrySpec)
 	if *AuthRegistry == true {
 		if basicAuth == "" {
-			blog.Exit("Registry auth could not be determined from $HOME/.dockercfg")
+			blog.Exit("Registry auth could not be determined from docker config.")
 		}
 		BasicAuth = basicAuth
 	}
@@ -67,7 +74,7 @@ func GetRegistryURL() (URL string, hubAPI bool, BasicAuth string, XRegistryAuth 
 }
 
 // RegAuth takes as input the name of a registry, and it parses the contents of
-// $HOME/.dockercfg to return the user authentication info and registry URL.
+// $HOME/.dockercfg or $HOME/.docker/config.json to return the user authentication info and registry URL.
 // TODO: Change this to return authConfig instead of user&password, and then
 // use X-Registry-Auth in the HTTP request header.
 func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
@@ -75,21 +82,48 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 		fullRegistry = registry
 		return
 	}
-	home := os.Getenv("HOME")
-	data, err := ioutil.ReadFile(home + "/.dockercfg")
-	if err != nil {
-		blog.Exit("Could not read $HOME/.dockercfg:", home+"/.dockercfg")
-	}
-	return getRegAuth(data, registry)
-}
 
-// getRegAuth parses JSON data (from $HOME/.dockercfg) to get authentication and URL info
-// for the registry specified in the parameter list.
-func getRegAuth(data []byte, registry string) (basicAuth, fullRegistry, authConfig string) {
+	var useDotDockerDir bool
+	major, minor, revision, err := dockerVersion()
+	if err != nil {
+		blog.Exit("Could not determine Docker version")
+	}
+	if major < 1 || (major == 1 && minor <= 2) {
+		blog.Exit("Unsupported docker version %d.%d.%d", major, minor, revision)
+	}
+	if major == 1 && minor <= 6 {
+		DockerConfig = os.Getenv("HOME") + "/.dockercfg"
+		useDotDockerDir = false
+	} else {
+		DockerConfig = os.Getenv("HOME") + "/.docker/config.json"
+		useDotDockerDir = true
+	}
+
+	data, err := ioutil.ReadFile(DockerConfig)
+	if err != nil {
+		if useDotDockerDir == false {
+			blog.Exit("Could not read", DockerConfig)
+		}
+		// new .docker/config.json didn't work, so try the old .dockercfg
+		blog.Error("Could not read %s", DockerConfig)
+		DockerConfig = os.Getenv("HOME") + "/.dockercfg"
+		useDotDockerDir = false
+		data, err = ioutil.ReadFile(DockerConfig)
+		if err != nil {
+			blog.Exit("Could not read", DockerConfig)
+		}
+	}
+
+	var dcj DockerConfigJSON
 	var das DockerAuthSet
-	e := json.Unmarshal(data, &das)
-	if e != nil {
-		blog.Error(e, "Couldn't JSON unmarshal from docker auth data")
+	if useDotDockerDir {
+		err = json.Unmarshal(data, &dcj)
+		das = dcj.Auths
+	} else {
+		err = json.Unmarshal(data, &das)
+	}
+	if err != nil {
+		blog.Error(err, "Couldn't JSON unmarshal from docker auth data")
 		return
 	}
 	for r, d := range das {

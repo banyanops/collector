@@ -188,6 +188,48 @@ func doDockerAPI(tr *http.Transport, operation, apipath string, jsonString []byt
 	return
 }
 
+func dockerVersion() (major, minor, revision int, err error) {
+	apipath := "/version"
+	resp, err := doDockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
+	if err != nil {
+		blog.Error(err, ": Error in Remote Docker API call: ", apipath)
+		return
+	}
+	var msg struct {
+		Version string
+	}
+	err = json.Unmarshal(resp, &msg)
+	if err != nil {
+		blog.Error(err, "unmarshal", string(resp))
+		return
+	}
+	version := msg.Version
+	blog.Info("Docker version %s", version)
+	arr := strings.Split(version, ".")
+	if len(arr) >= 1 {
+		major, err = strconv.Atoi(arr[0])
+		if err != nil {
+			blog.Error(err)
+			return
+		}
+	}
+	if len(arr) >= 2 {
+		minor, err = strconv.Atoi(arr[1])
+		if err != nil {
+			blog.Error(err)
+			return
+		}
+	}
+	if len(arr) >= 3 {
+		revision, err = strconv.Atoi(arr[2])
+		if err != nil {
+			blog.Error(err)
+			return
+		}
+	}
+	return
+}
+
 // createCmd returns a json byte slice desribing the container we want to create
 func createCmd(imageID ImageIDType, scriptName, staticBinary, dirPath string) (jsonString []byte, err error) {
 	var container Container
