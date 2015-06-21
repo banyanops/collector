@@ -23,6 +23,8 @@ var (
 		"Set to false if registry does not need authentication")
 	RegistryProto = flag.String([]string{"-registryproto"}, "v1",
 		"Select the registry protocol to use: v1, v2, quay")
+	RegistryTLSNoVerify = flag.Bool([]string{"-registrytlsnoverify"}, false,
+		"True to trust the registry without verifying certificate")
 	// registryspec is the host.domainname of the registry
 	RegistrySpec string
 	// registryAPIURL is the http(s)://[user:password@]host.domainname of the registry

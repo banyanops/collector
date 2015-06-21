@@ -4,6 +4,7 @@ package collector
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -292,7 +293,15 @@ func getRepos() (repoSlice []RepoType, err error) {
 	}
 
 	// a query with an empty query string returns all the repos
-	client := &http.Client{}
+	var client *http.Client
+	if *RegistryTLSNoVerify {
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client = &http.Client{Transport: tr}
+	} else {
+		client = &http.Client{}
+	}
 	response, err := RegistryQuery(client, RegistryAPIURL+"/v1/search?q=", BasicAuth)
 	if err != nil {
 		blog.Error(err)
@@ -365,7 +374,15 @@ func getReposHub() (hubInfo []HubInfo, err error) {
 }
 
 func v1GetTags(repoSlice []RepoType) (tagSlice []TagInfo, e error) {
-	client := &http.Client{}
+	var client *http.Client
+	if *RegistryTLSNoVerify {
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client = &http.Client{Transport: tr}
+	} else {
+		client = &http.Client{}
+	}
 	for _, repo := range repoSlice {
 		// get tags for one repo
 		response, err := RegistryQuery(client, RegistryAPIURL+"/v1/repositories/"+string(repo)+"/tags", BasicAuth)
@@ -722,7 +739,15 @@ func RemoveObsoleteMetadata(obsolete []ImageMetadataInfo) {
 }
 
 func v2GetTagsMetadata(repoSlice []RepoType) (tagSlice []TagInfo, metadataSlice []ImageMetadataInfo, e error) {
-	client := &http.Client{}
+	var client *http.Client
+	if *RegistryTLSNoVerify {
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client = &http.Client{Transport: tr}
+	} else {
+		client = &http.Client{}
+	}
 	for _, repo := range repoSlice {
 		// get tags for one repo
 		response, err := RegistryQuery(client, RegistryAPIURL+"/v2/"+string(repo)+"/tags/list", BasicAuth)
@@ -782,7 +807,15 @@ func getImageMetadata(tagSlice []TagInfo, oldMetadataSet MetadataSet) (metadataS
 	ch := make(chan ImageMetadataInfo)
 	errch := make(chan error)
 	goCount := 0
-	client := &http.Client{}
+	var client *http.Client
+	if *RegistryTLSNoVerify {
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client = &http.Client{Transport: tr}
+	} else {
+		client = &http.Client{}
+	}
 	for imageID := range imageMap {
 		var curr ImageMetadataInfo
 		if previousImages[imageID] {
