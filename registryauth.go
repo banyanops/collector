@@ -23,6 +23,8 @@ var (
 		"Set to false if registry does not need authentication")
 	RegistryProto = flag.String([]string{"-registryproto"}, "v1",
 		"Select the registry protocol to use: v1, v2, quay")
+	RegistryTokenAuth = flag.Bool([]string{"-registrytokenauth"}, false,
+		"Registry uses v1 Token Auth, e.g., Docker Hub, Google Container Registry")
 	RegistryTLSNoVerify = flag.Bool([]string{"-registrytlsnoverify"}, false,
 		"True to trust the registry without verifying certificate")
 	// registryspec is the host.domainname of the registry
@@ -68,8 +70,15 @@ func GetRegistryURL() (URL string, hubAPI bool, BasicAuth string, XRegistryAuth 
 		} else {
 			URL = "https://" + RegistrySpec
 		}
-		if strings.Contains(URL, "docker.io") {
+		if *RegistryTokenAuth == true {
 			hubAPI = true
+		}
+		if strings.Contains(URL, "docker.io") || strings.Contains(URL, "gcr.io") {
+			hubAPI = true
+			if *RegistryTokenAuth == false {
+				blog.Warn("Forcing --registrytokenauth=true, as required for Docker Hub and Google Container Registry")
+				*RegistryTokenAuth = true
+			}
 		}
 	}
 	return
@@ -129,7 +138,7 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 		return
 	}
 	for r, d := range das {
-		if strings.Contains(r, registry) {
+		if r == registry || r == "https://"+registry || r == "https://"+registry+"/v1/" {
 			encData, err := base64.StdEncoding.DecodeString(d.Auth)
 			if err != nil {
 				blog.Error(err, ": error")

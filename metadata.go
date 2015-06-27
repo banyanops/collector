@@ -44,8 +44,8 @@ func NewImageSet() ImageSet {
 	return ImageSet(make(map[ImageIDType]bool))
 }
 
-// HubInfo records the index and auth information provided by Docker Hub to access a repository.
-type HubInfo struct {
+// IndexInfo records the index and auth information provided by Docker Hub to access a repository.
+type IndexInfo struct {
 	Repo        RepoType
 	DockerToken string
 	RegistryURL string
@@ -149,12 +149,12 @@ type ImageStruct struct {
 	Comment string
 }
 
-// HubInfoMap maps repository name to the corresponding Docker Hub auth/index info.
-type HubInfoMap map[RepoType]HubInfo
+// IndexInfoMap maps repository name to the corresponding Docker Hub auth/index info.
+type IndexInfoMap map[RepoType]IndexInfo
 
-// NewHubInfoMap is a constructor for HubInfoMap.
-func NewHubInfoMap() HubInfoMap {
-	return make(map[RepoType]HubInfo)
+// NewIndexInfoMap is a constructor for IndexInfoMap.
+func NewIndexInfoMap() IndexInfoMap {
+	return make(map[RepoType]IndexInfo)
 }
 
 // ByDateTime is used to sort ImageMetadataInfo slices by image age from newest to oldest.
@@ -246,26 +246,27 @@ func GetImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataS
 	return
 }
 
-// GetImageMetadataHub returns repositories/tags/image metadata from the Docker Hub.
+// GetImageMetadataTokenAuthV1 returns repositories/tags/image metadata from the Docker Hub
+// or other registry using v1 token authorization.
 // The user must have specified a set of repositories of interest.
-// The function queries Docker Hub as an index to the registries, and then retrieves
-// information directly from the registries, using Docker Hub authentication tokens.
-func GetImageMetadataHub(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataSlice []ImageMetadataInfo) {
+// The function queries the index server, e.g., Docker Hub, to get the token and registry, and then uses
+// the token to query the registry.
+func GetImageMetadataTokenAuthV1(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataSlice []ImageMetadataInfo) {
 	for {
-		blog.Info("Get Repos from Docker Hub")
-		hubInfoSlice, e := getReposHub()
+		blog.Info("Get Repos using Registry v1 Token Authentication")
+		indexInfoSlice, e := getReposTokenAuthV1()
 		if e != nil {
-			blog.Warn(e, " getReposHub")
+			blog.Warn(e, " getReposTokenAuthV1")
 			blog.Warn("Retrying")
 			time.Sleep(config.RETRYDURATION)
 			continue
 		}
 
-		blog.Info("Get Tags and Metadata from Docker Hub")
+		blog.Info("Get Tags and Metadata using Registry v1 Token Authentication")
 		// Now get a list of all the tags
-		tagSlice, metadataSlice, e = getTagsMetadataHub(hubInfoSlice, oldMetadataSet)
+		tagSlice, metadataSlice, e = getTagsMetadataTokenAuthV1(indexInfoSlice, oldMetadataSet)
 		if e != nil {
-			blog.Warn(e, " getTagsMetadataHub")
+			blog.Warn(e, " getTagsMetadataTokenAuthV1")
 			blog.Warn("Retrying")
 			time.Sleep(config.RETRYDURATION)
 			continue
@@ -326,9 +327,9 @@ func getRepos() (repoSlice []RepoType, err error) {
 	return
 }
 
-// getReposHub validates the user-specified list of repositories against the Docker Hub index.
-// It returns a list of HubInfo structs with index info for each validated repository.
-func getReposHub() (hubInfo []HubInfo, err error) {
+// getReposTokenAuthV1 validates the user-specified list of repositories against an index server, e.g., Docker Hub.
+// It returns a list of IndexInfo structs with index info for each validated repository.
+func getReposTokenAuthV1() (indexInfo []IndexInfo, err error) {
 	// lookup defines a function that takes a repository name as input and returns
 	// the Docker auth token and registry URL to access that repository.
 	client := &http.Client{}
@@ -341,13 +342,16 @@ func getReposHub() (hubInfo []HubInfo, err error) {
 		}
 		r, e := client.Do(req)
 		if e != nil {
-			blog.Error(e, ":getReposHub HTTP request failed")
+			blog.Error(e, ":getReposTokenAuthV1 HTTP request failed")
 			return
 		}
 		defer r.Body.Close()
-		if r.StatusCode != 200 {
-			blog.Error("getReposHub HTTP bad status code %d from Docker Hub", r.StatusCode)
+		if !strings.Contains(RegistryAPIURL, "gcr.io") && r.StatusCode != 200 {
+			blog.Error("getReposTokenAuthV1 HTTP bad status code %d from %s", r.StatusCode, RegistryAPIURL)
 			return
+		}
+		if strings.Contains(RegistryAPIURL, "gcr.io") && r.StatusCode == 403 {
+			blog.Warn("HTTP status code %d for token lookup from %s", r.StatusCode, RegistryAPIURL)
 		}
 		dockerToken = r.Header.Get("X-Docker-Token")
 		registryURL = r.Header.Get("X-Docker-Endpoints")
@@ -366,8 +370,8 @@ func getReposHub() (hubInfo []HubInfo, err error) {
 				blog.Error(repo, ":Could not find info for repo.")
 				continue
 			}
-			hubInfo = append(hubInfo,
-				HubInfo{Repo: repo, DockerToken: dockerToken, RegistryURL: registryURL})
+			indexInfo = append(indexInfo,
+				IndexInfo{Repo: repo, DockerToken: dockerToken, RegistryURL: registryURL})
 		}
 	}
 	return
@@ -473,15 +477,15 @@ func getTags(repoSlice []RepoType) (tagSlice []TagInfo, e error) {
 	panic("Unreachable")
 }
 
-// getTagsMetadataHub takes Docker Hub auth and index info and uses it to query
+// getTagsMetadataTokenAuthV1 takes Docker Hub auth and index info and uses it to query
 // registries for the tags and metadata for each repository.
-func getTagsMetadataHub(hubInfoSlice []HubInfo, oldMetadataSet MetadataSet) (tagSlice []TagInfo,
+func getTagsMetadataTokenAuthV1(indexInfoSlice []IndexInfo, oldMetadataSet MetadataSet) (tagSlice []TagInfo,
 	metadataSlice []ImageMetadataInfo, e error) {
 
-	// populate map from ImageID to HubInfo (docker hub token)
-	hubInfoMap := NewHubInfoMap()
-	for _, h := range hubInfoSlice {
-		hubInfoMap[h.Repo] = h
+	// populate map from ImageID to IndexInfo (docker hub token)
+	indexInfoMap := NewIndexInfoMap()
+	for _, h := range indexInfoSlice {
+		indexInfoMap[h.Repo] = h
 	}
 
 	// populate map from ImageID to Image Metadata Info
@@ -493,10 +497,10 @@ func getTagsMetadataHub(hubInfoSlice []HubInfo, oldMetadataSet MetadataSet) (tag
 	}
 
 	// get tag and image metadata info
-	for _, hubInfo := range hubInfoSlice {
+	for _, indexInfo := range indexInfoSlice {
 		// singleTagSlice: get all the tags for a single repo
 		var singleTagSlice []TagInfo
-		singleTagSlice, e = lookupTagsHub(hubInfo)
+		singleTagSlice, e = lookupTagsTokenAuthV1(indexInfo)
 		if e != nil {
 			blog.Error(e, ": Error in looking up tags in dockerhub")
 			//ignore this repo and continue  (changed from return to continue)
@@ -524,10 +528,10 @@ func getTagsMetadataHub(hubInfoSlice []HubInfo, oldMetadataSet MetadataSet) (tag
 					// create a new entry, and determine field values
 					// by querying the registry
 					goCount++
-					go func(repo RepoType, tag TagType, imageID ImageIDType, hubInfo HubInfo,
+					go func(repo RepoType, tag TagType, imageID ImageIDType, indexInfo IndexInfo,
 						ch chan ImageMetadataInfo, errch chan error) {
 						var metadata ImageMetadataInfo
-						metadata, e = lookupMetadataHub(repo, tag, imageID, hubInfo)
+						metadata, e = lookupMetadataTokenAuthV1(repo, tag, imageID, indexInfo)
 						if e != nil {
 							blog.Error(e, "Unable to lookup metadata for",
 								repo, ":", tag, string(imageID))
@@ -537,7 +541,7 @@ func getTagsMetadataHub(hubInfoSlice []HubInfo, oldMetadataSet MetadataSet) (tag
 							return
 						}
 						ch <- metadata
-					}(repo, tag, imageID, hubInfo, ch, errch)
+					}(repo, tag, imageID, indexInfo, ch, errch)
 					if goCount > maxGoCount {
 						for ; goCount > minGoCount; goCount-- {
 							select {
@@ -565,9 +569,8 @@ func getTagsMetadataHub(hubInfoSlice []HubInfo, oldMetadataSet MetadataSet) (tag
 	return
 }
 
-// RegistryRequestWithToken queries a Docker Registry that accepts Authorization: Token
-// headers with token values obtained from a Docker Index, e.g., Docker Hub.
-func RegistryRequestWithToken(client *http.Client, URL string, basicAuth string, dockerToken string) (response []byte, e error) {
+// RegistryRequestWithToken queries a Docker Registry that uses v1 Token Auth, e.g., Docker Hub.
+func RegistryRequestWithToken(client *http.Client, URL string, dockerToken string) (response []byte, e error) {
 	var req *http.Request
 	req, e = http.NewRequest("GET", URL, nil)
 	if e != nil {
@@ -594,12 +597,12 @@ func RegistryRequestWithToken(client *http.Client, URL string, basicAuth string,
 	return
 }
 
-// lookupTagsHub accesses the registries pointed to by Docker Hub and returns tag and image info
-// for each specified repository.
-func lookupTagsHub(info HubInfo) (tagSlice []TagInfo, e error) {
+// lookupTagsTokenAuthV1 accesses the registries pointed to by an index server, e.g., Docker Hub,
+// and returns tag and image info for each specified repository.
+func lookupTagsTokenAuthV1(info IndexInfo) (tagSlice []TagInfo, e error) {
 	client := &http.Client{}
 	URL := "https://" + info.RegistryURL + "/v1/repositories/" + string(info.Repo) + "/tags"
-	response, e := RegistryRequestWithToken(client, URL, BasicAuth, info.DockerToken)
+	response, e := RegistryRequestWithToken(client, URL, info.DockerToken)
 	if e != nil {
 		blog.Error(e)
 		if s, ok := e.(*HTTPStatusCodeError); ok {
@@ -620,15 +623,15 @@ func lookupTagsHub(info HubInfo) (tagSlice []TagInfo, e error) {
 	return
 }
 
-// lookupMetadataHub takes as input matching repo, tag, imageID, and Docker Hub auth/index info,
+// lookupMetadataTokenAuthV1 takes as input matching repo, tag, imageID, and Docker Hub auth/index info,
 // and it returns ImageMetadataInfo for that image by querying the indexed registry.
-func lookupMetadataHub(repo RepoType, tag TagType, imageID ImageIDType, hubInfo HubInfo) (
+func lookupMetadataTokenAuthV1(repo RepoType, tag TagType, imageID ImageIDType, indexInfo IndexInfo) (
 	metadata ImageMetadataInfo, e error) {
 
 	blog.Info("Get Metadata for Image: %s", string(imageID))
 	client := &http.Client{}
-	URL := "https://" + hubInfo.RegistryURL + "/v1/images/" + string(imageID) + "/json"
-	response, e := RegistryRequestWithToken(client, URL, BasicAuth, hubInfo.DockerToken)
+	URL := "https://" + indexInfo.RegistryURL + "/v1/images/" + string(imageID) + "/json"
+	response, e := RegistryRequestWithToken(client, URL, indexInfo.DockerToken)
 	if e != nil {
 		blog.Error(e, "Unable to query metadata for Repo: "+string(repo)+
 			"Tag: "+string(tag)+" Image: "+string(imageID))
@@ -667,7 +670,7 @@ func GetNewImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo,
 	case HubAPI == false:
 		tagSlice, currentMetadataSlice = GetImageMetadata(oldMetadataSet)
 	case HubAPI == true:
-		tagSlice, currentMetadataSlice = GetImageMetadataHub(oldMetadataSet)
+		tagSlice, currentMetadataSlice = GetImageMetadataTokenAuthV1(oldMetadataSet)
 	}
 
 	// get only the new metadata from currentMetadataSlice

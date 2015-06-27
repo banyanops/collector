@@ -87,14 +87,14 @@ func TestGetReposHub(t *testing.T) {
 	}
 	ReposToProcess["library/mysql"] = true
 	//reposToProcess["ncarlier/redis"] = true
-	hubInfo, e := getReposHub()
+	indexInfo, e := getReposTokenAuthV1()
 	if e != nil {
 		t.Fatal(e)
 	}
-	if hubInfo == nil || len(hubInfo) == 0 {
-		t.Fatal("hubInfo is nil")
+	if indexInfo == nil || len(indexInfo) == 0 {
+		t.Fatal("indexInfo is nil")
 	}
-	fmt.Print(hubInfo, e)
+	fmt.Print(indexInfo, e)
 	return
 }
 
@@ -108,15 +108,15 @@ func TestGetTagsMetadataHub(t *testing.T) {
 		t.Fatal("TestGetTagsMetadataHub only works with DOCKER_REGISTRY=index.docker.io")
 	}
 	ReposToProcess["library/mysql"] = true
-	hubInfo, e := getReposHub()
+	indexInfo, e := getReposTokenAuthV1()
 	if e != nil {
 		t.Fatal(e)
 	}
-	if hubInfo == nil || len(hubInfo) == 0 {
-		t.Fatal("hubInfo is nil")
+	if indexInfo == nil || len(indexInfo) == 0 {
+		t.Fatal("indexInfo is nil")
 	}
 	oldMetadataSet := NewMetadataSet()
-	tagSlice, metadataSlice, e := getTagsMetadataHub(hubInfo, oldMetadataSet)
+	tagSlice, metadataSlice, e := getTagsMetadataTokenAuthV1(indexInfo, oldMetadataSet)
 	if e != nil {
 		t.Fatal(e)
 	}
