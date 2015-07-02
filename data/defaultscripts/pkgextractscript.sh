@@ -53,4 +53,4 @@ then
 	exit 0
 fi
 
-exit 2
+exit 0

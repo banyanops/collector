@@ -48,6 +48,17 @@ func parsePkgExtractOutput(output []byte, imageID ImageIDType) (imageDataInfo []
 		imageData.Architecture = pkgInfo.Architecture
 		imageDataInfo = append(imageDataInfo, imageData)
 	}
+	// if no package info was found, return a single entry with empty string in the package info fields.
+	if len(outInfo.PkgsInfo) == 0 {
+		var imageData ImageDataInfo
+		imageData.DistroName = outInfo.DistroName
+		imageData.DistroID = getDistroID(outInfo.DistroName)
+		imageData.Image = string(imageID)
+		imageData.Pkg = ""
+		imageData.Version = ""
+		imageData.Architecture = ""
+		imageDataInfo = append(imageDataInfo, imageData)
+	}
 
 	return
 }
