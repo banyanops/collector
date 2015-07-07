@@ -12,6 +12,7 @@ import (
 
 	collector "github.com/banyanops/collector"
 	config "github.com/banyanops/collector/config"
+	fsutil "github.com/banyanops/collector/fsutil"
 	blog "github.com/ccpaging/log4go"
 	flag "github.com/docker/docker/pkg/mflag"
 )
@@ -253,11 +254,11 @@ func setupLogging() {
 // copyBanyanData copies all the default scripts and binaries (e.g., bash-static, python-static, etcollector.)
 // to BANYANDIR (so that it can be mounted into collector/target containers)
 func copyBanyanData() {
-	collector.CopyDir(config.COLLECTORDIR()+"/data/defaultscripts", collector.DefaultScriptsDir)
+	fsutil.CopyDir(config.COLLECTORDIR()+"/data/defaultscripts", collector.DefaultScriptsDir)
 	//copy scripts from user specified/default directory to userScriptsDir for mounting
-	collector.CopyDir(*collector.UserScriptStore, collector.UserScriptsDir)
+	fsutil.CopyDir(*collector.UserScriptStore, collector.UserScriptsDir)
 	// * needed to copy into binDir (rather than a subdir called bin)
-	collector.CopyDirTree(config.COLLECTORDIR()+"/data/bin/*", collector.BinDir)
+	fsutil.CopyDirTree(config.COLLECTORDIR()+"/data/bin/*", collector.BinDir)
 }
 
 func InfLoop(authToken string, processedImages collector.ImageSet, MetadataSet collector.MetadataSet,

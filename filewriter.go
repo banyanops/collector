@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	fsutil "github.com/banyanops/collector/fsutil"
 	blog "github.com/ccpaging/log4go"
 )
 
@@ -37,7 +38,7 @@ func (f *FileWriter) WriteImageAllData(outMapMap map[string]map[string]interface
 	for imageID, scriptMap := range outMapMap {
 		for scriptName, out := range scriptMap {
 			scriptDir := f.dir + "/" + trimExtension(scriptName)
-			err := CreateDirIfNotExist(scriptDir)
+			err := fsutil.CreateDirIfNotExist(scriptDir)
 			if err != nil {
 				blog.Error(err, ": Error creating script dir: ", scriptDir)
 				continue
@@ -86,7 +87,7 @@ func (f *FileWriter) handleImageMetadata(imageMetadata []ImageMetadataInfo, acti
 	}
 
 	// If output directory does not exist, first create it
-	CreateDirIfNotExist(f.dir)
+	fsutil.CreateDirIfNotExist(f.dir)
 	filenamePath := f.dir + "/" + "metadata"
 
 	data := ImageMetadataAndAction{action, imageMetadata}

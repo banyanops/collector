@@ -8,6 +8,7 @@ import (
 
 	collector "github.com/banyanops/collector"
 	config "github.com/banyanops/collector/config"
+	fsutil "github.com/banyanops/collector/fsutil"
 	blog "github.com/ccpaging/log4go"
 	flag "github.com/docker/docker/pkg/mflag"
 )
@@ -55,7 +56,7 @@ func doFlags() {
 	requiredDirs := []string{config.BANYANDIR(), filepath.Dir(*imageList), filepath.Dir(*repoList), *config.BanyanOutDir, collector.DefaultScriptsDir, collector.UserScriptsDir, collector.BinDir}
 	for _, dir := range requiredDirs {
 		blog.Debug("Creating directory: " + dir)
-		err := collector.CreateDirIfNotExist(dir)
+		err := fsutil.CreateDirIfNotExist(dir)
 		if err != nil {
 			blog.Exit(err, ": Error in creating a required directory: ", dir)
 		}

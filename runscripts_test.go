@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"testing"
+
+	fsutil "github.com/banyanops/collector/fsutil"
 )
 
 const (
@@ -40,10 +42,10 @@ func TestBashScriptRun(t *testing.T) {
 	PullImage(metadata)
 
 	os.Setenv("BANYAN_HOST_DIR", "/tmp/banyandir")
-	CreateDirIfNotExist("/tmp/banyandir/hosttarget/bin")
-	CreateDirIfNotExist("/tmp/banyandir/hosttarget/defaultscripts")
-	CopyDirTree(os.Getenv("PWD")+"/data/bin/*", "/tmp/banyandir/hosttarget/bin")
-	CopyDir(os.Getenv("PWD")+"/data/defaultscripts", "/tmp/banyandir/hosttarget/defaultscripts")
+	fsutil.CreateDirIfNotExist("/tmp/banyandir/hosttarget/bin")
+	fsutil.CreateDirIfNotExist("/tmp/banyandir/hosttarget/defaultscripts")
+	fsutil.CopyDirTree(os.Getenv("PWD")+"/data/bin/*", "/tmp/banyandir/hosttarget/bin")
+	fsutil.CopyDir(os.Getenv("PWD")+"/data/defaultscripts", "/tmp/banyandir/hosttarget/defaultscripts")
 	bs := newBashScript("pkgextractscript.sh", "/banyancollector/defaultscripts", []string{})
 	b, err := bs.Run(ImageIDType("ubuntu"))
 	if err != nil {

@@ -346,12 +346,9 @@ func getReposTokenAuthV1() (indexInfo []IndexInfo, err error) {
 			return
 		}
 		defer r.Body.Close()
-		if !strings.Contains(RegistryAPIURL, "gcr.io") && r.StatusCode != 200 {
+		if r.StatusCode != 200 {
 			blog.Error("getReposTokenAuthV1 HTTP bad status code %d from %s", r.StatusCode, RegistryAPIURL)
 			return
-		}
-		if strings.Contains(RegistryAPIURL, "gcr.io") && r.StatusCode == 403 {
-			blog.Warn("HTTP status code %d for token lookup from %s", r.StatusCode, RegistryAPIURL)
 		}
 		dockerToken = r.Header.Get("X-Docker-Token")
 		registryURL = r.Header.Get("X-Docker-Endpoints")
@@ -368,6 +365,8 @@ func getReposTokenAuthV1() (indexInfo []IndexInfo, err error) {
 			dockerToken, registryURL := lookup(repo)
 			if dockerToken == "" {
 				blog.Error(repo, ":Could not find info for repo.")
+				// TODO: In case the missing repo returns, we should apply the maximages constraint
+				// to it. To enable that, we need to remember these missing repos.
 				continue
 			}
 			indexInfo = append(indexInfo,

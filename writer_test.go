@@ -1,12 +1,16 @@
 package collector
 
-import "testing"
-import "os"
-import blog "github.com/ccpaging/log4go"
-import "time"
-import "io/ioutil"
-import "encoding/json"
-import "bytes"
+import (
+	"bytes"
+	"encoding/json"
+	"io/ioutil"
+	"os"
+	"testing"
+	"time"
+
+	fsutil "github.com/banyanops/collector/fsutil"
+	blog "github.com/ccpaging/log4go"
+)
 
 // TestWriteImageAllData tests writing different types of image data to files
 func TestWriteImageAllData(t *testing.T) {
@@ -64,7 +68,7 @@ func testWriteToFile(t *testing.T, outMapMap map[string]map[string]interface{}, 
 	finalDir := destDir + "/" + trimExtension(script) + "/"
 	blog.Debug("final dir: " + finalDir)
 	var filenamePath string
-	if ok, e := dirExists(finalDir); ok {
+	if ok, e := fsutil.DirExists(finalDir); ok {
 		if len(image) > 12 {
 			image = image[0:12]
 		}
@@ -152,7 +156,7 @@ func testWriteImageMDToFile(t *testing.T, imageMD []ImageMetadataInfo, destDir, 
 
 	// Check vailidity of output files
 	var filenamePath string
-	if ok, e := dirExists(destDir); ok {
+	if ok, e := fsutil.DirExists(destDir); ok {
 		file := "metadata." + format
 		filenamePath = destDir + "/" + file
 		_, err := os.Stat(filenamePath)
