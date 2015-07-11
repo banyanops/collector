@@ -3,6 +3,7 @@ package collector
 import (
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"os"
 	"testing"
 )
@@ -87,12 +88,11 @@ func TestGetReposHub(t *testing.T) {
 	}
 	ReposToProcess["library/mysql"] = true
 	//reposToProcess["ncarlier/redis"] = true
-	indexInfo, e := getReposTokenAuthV1()
+	repo := RepoType("library/mysql")
+	client := &http.Client{}
+	indexInfo, e := getReposTokenAuthV1(repo, client)
 	if e != nil {
 		t.Fatal(e)
-	}
-	if indexInfo == nil || len(indexInfo) == 0 {
-		t.Fatal("indexInfo is nil")
 	}
 	fmt.Print(indexInfo, e)
 	return
@@ -107,16 +107,21 @@ func TestGetTagsMetadataHub(t *testing.T) {
 	if registry != "index.docker.io" {
 		t.Fatal("TestGetTagsMetadataHub only works with DOCKER_REGISTRY=index.docker.io")
 	}
-	ReposToProcess["library/mysql"] = true
-	indexInfo, e := getReposTokenAuthV1()
+	ReposToProcess["library/iojs"] = true
+	repo := RepoType("library/iojs")
+	client := &http.Client{}
+	indexInfo, e := getReposTokenAuthV1(repo, client)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if indexInfo == nil || len(indexInfo) == 0 {
-		t.Fatal("indexInfo is nil")
+	tagSlice, e := getTagsTokenAuthV1(repo, client, indexInfo)
+	if e != nil {
+		t.Fatal(e)
 	}
 	oldMetadataSet := NewMetadataSet()
-	tagSlice, metadataSlice, e := getTagsMetadataTokenAuthV1(indexInfo, oldMetadataSet)
+	metadataMap := NewImageToMetadataMap(oldMetadataSet)
+	metadataSlice, e := getMetadataTokenAuthV1(tagSlice[0], metadataMap, client, indexInfo)
+	//tagSlice, metadataSlice, e := getTagsMetadataTokenAuthV1(indexInfo, oldMetadataSet)
 	if e != nil {
 		t.Fatal(e)
 	}

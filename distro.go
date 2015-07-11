@@ -38,6 +38,7 @@ var DistroMap = map[string]string{
 	"Debian GNU/Linux 7 (wheezy)":                "DEBIAN-wheezy",
 	"Debian 6.0.10":                              "DEBIAN-squeeze",
 	"Debian GNU/Linux 8 (jessie)":                "DEBIAN-jessie",
+	"Debian GNU/Linux stretch/sid":               "DEBIAN-stretch-sid",
 }
 
 // getDistroID takes a distribution "pretty name" as input and returns the corresponding
