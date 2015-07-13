@@ -41,11 +41,13 @@ func TestBashScriptRun(t *testing.T) {
 	fmt.Println("TestPullImage %v", metadata)
 	PullImage(metadata)
 
-	os.Setenv("BANYAN_HOST_DIR", "/tmp/banyandir")
-	fsutil.CreateDirIfNotExist("/tmp/banyandir/hosttarget/bin")
-	fsutil.CreateDirIfNotExist("/tmp/banyandir/hosttarget/defaultscripts")
-	fsutil.CopyDirTree(os.Getenv("PWD")+"/data/bin/*", "/tmp/banyandir/hosttarget/bin")
-	fsutil.CopyDir(os.Getenv("PWD")+"/data/defaultscripts", "/tmp/banyandir/hosttarget/defaultscripts")
+	PWD := os.Getenv("PWD")
+	os.Setenv("BANYAN_HOST_DIR", PWD+"/banyandir")
+	fsutil.CreateDirIfNotExist(os.Getenv("BANYAN_HOST_DIR") + "/hosttarget/bin")
+	defer os.RemoveAll(os.Getenv("BANYAN_HOST_DIR"))
+	fsutil.CreateDirIfNotExist(os.Getenv("BANYAN_HOST_DIR") + "/hosttarget/defaultscripts")
+	fsutil.CopyDirTree(os.Getenv("PWD")+"/data/bin/*", os.Getenv("BANYAN_HOST_DIR")+"/hosttarget/bin")
+	fsutil.CopyDir(os.Getenv("PWD")+"/data/defaultscripts", os.Getenv("BANYAN_HOST_DIR")+"/hosttarget/defaultscripts")
 	bs := newBashScript("pkgextractscript.sh", "/banyancollector/defaultscripts", []string{})
 	b, err := bs.Run(ImageIDType("ubuntu"))
 	if err != nil {
@@ -60,7 +62,12 @@ func TestPostDockerAPI(t *testing.T) {
 		t.Fatal(e)
 	}
 	apipath := "/containers/create"
-	jsonString := []byte(`{ "Hostname": "", "User": "0", "AttachStdin": false, "AttachStdout": true, "AttachStderr": true, "Tty": false, "Env": null, "Cmd": [ "-c", "PATH=/banyancollector:$PATH /banyancollector/pkgextractscript.sh" ], "Entrypoint": [ "/banyancollector/bash-static" ], "Image": "ubuntu", "WorkingDir": "", "HostConfig": { "Binds": [ "/home/yoshiotu/gospace/src/github.com/banyanops/collector/docker/data:/banyancollector:ro" ], "Links": null, "Privileged": false, "VolumesFrom": null } }`)
+	jsonString := []byte(`{ "Hostname": "", "User": "0", "AttachStdin": false, "AttachStdout": true, ` +
+		`"AttachStderr": true, "Tty": false, "Env": null, "Cmd": [ "-c", ` +
+		`"PATH=/banyancollector:$PATH /banyancollector/pkgextractscript.sh" ], "Entrypoint": [ ` +
+		`"/banyancollector/bash-static" ], "Image": "ubuntu", "WorkingDir": "", "HostConfig": { ` +
+		`"Binds": [ "` + os.Getenv("PWD") + `/docker/data:/banyancollector:ro" ], "Links": null, ` +
+		`"Privileged": false, "VolumesFrom": null } }`)
 	resp, err := doDockerAPI(tr, "POST", apipath, jsonString, "")
 	if err != nil {
 		t.Fatal(err)
