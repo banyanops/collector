@@ -27,7 +27,7 @@ func doFlags() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "  Usage: %s [OPTIONS] REGISTRY REPO [REPO...]\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "\n  REGISTRY:\n")
-		fmt.Fprintf(os.Stderr, "\tURL of your Docker registry; use index.docker.io for Docker Hub \n")
+		fmt.Fprintf(os.Stderr, "\tURL of your Docker registry; use index.docker.io for Docker Hub, use local.host to collect images from local Docker host\n")
 		fmt.Fprintf(os.Stderr, "\n  REPO:\n")
 		fmt.Fprintf(os.Stderr, "\tOne or more repos to gather info about; if no repo is specified Collector will gather info on *all* repos in the Registry\n")
 		fmt.Fprintf(os.Stderr, "\n  Environment variables:\n")
@@ -62,6 +62,10 @@ func doFlags() {
 		}
 	}
 	collector.RegistrySpec = flag.Arg(0)
+	// EqualFold: case insensitive comparison
+	if strings.EqualFold(flag.Arg(0), "local.host") {
+		collector.LocalHost = true
+	}
 	//nextMaxImages = *maxImages
 }
 

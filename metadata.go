@@ -162,6 +162,14 @@ type ImageStruct struct {
 	Comment string
 }
 
+// LocalImageStruct records information returned by the local daemon to describe an image,ff
+// in a response to List Image query.
+type LocalImageStruct struct {
+	ID       string 	`json:"Id"`
+	Parent   string		`json:"ParentId"`
+	RepoTags []string	`json:"RepoTags"`
+}
+
 // IndexInfoMap maps repository name to the corresponding Docker Hub auth/index info.
 type IndexInfoMap map[RepoType]IndexInfo
 
@@ -188,6 +196,73 @@ func GetImageToMDMap(imageMDs []ImageMetadataInfo) (imageToMDMap map[string][]Im
 	imageToMDMap = make(map[string][]ImageMetadataInfo)
 	for _, imageMD := range imageMDs {
 		imageToMDMap[imageMD.Image] = append(imageToMDMap[imageMD.Image], imageMD)
+	}
+	return
+}
+
+// getLocalImages queries the local Docker daemon for list of images.
+func getLocalImages() (imageMap map[ImageIDType][]RepoTagType, e error) {
+
+	// query a list of images from Docker daemon
+	response, e := listImages()
+	if e != nil {
+		return nil, e
+	}
+	blog.Info(string(response))
+	// parse JSON
+	var localImageList []LocalImageStruct
+	if e = json.Unmarshal(response, &localImageList); e != nil {
+		return nil, e
+	}
+
+	// make map from each imageID to all of its aliases (repo+tag)
+	imageMap = make(map[ImageIDType][]RepoTagType)
+	for _, localImage := range localImageList {
+		imageID := ImageIDType(localImage.ID)
+		for _, repoTag := range localImage.RepoTags {
+			// repoTag example: "localhost:5000/test/busybox:latest"
+			// repo: "localhost:5000/test/busybox"
+			// tag: "latest"
+			ss := strings.Split(repoTag, ":")
+			tag := ss[len(ss)-1]
+			repo := repoTag[:len(repoTag)-len(tag)-1]
+			blog.Debug(imageID, repoTag, repo, tag)
+
+			repotag := RepoTagType{Repo: RepoType(repo), Tag: TagType(tag)}
+
+			if _, ok := imageMap[imageID]; ok {
+				imageMap[imageID] = append(imageMap[imageID], repotag)
+			} else {
+				imageMap[imageID] = []RepoTagType{repotag}
+			}
+		}
+	}
+	return
+}
+
+// GetLocalImageMetadata returns image metadata queried from a local Docker host.
+// Query the local docker daemon to detect new image builds on the host and new images pulled from registry by users.
+func GetLocalImageMetadata(oldMetadataSet MetadataSet) (metadataSlice []ImageMetadataInfo) {
+	for {
+		blog.Info("Get a list of images from local Docker daemon")
+		imageMap, e := getLocalImages()
+		if e != nil {
+			blog.Warn(e, " getLocalImages")
+			blog.Warn("Retrying")
+			time.Sleep(config.RETRYDURATION)
+			continue
+		}
+
+		blog.Info("Get Image Metadata from local Docker daemon")
+		// Get image metadata
+		metadataSlice, e = getImageMetadata(imageMap, oldMetadataSet)
+		if e != nil {
+			blog.Warn(e, " getImageMetadata")
+			blog.Warn("Retrying")
+			time.Sleep(config.RETRYDURATION)
+			continue
+		}
+		break
 	}
 	return
 }
@@ -232,9 +307,23 @@ func GetImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataS
 				continue
 			}
 
+			// get map from each imageID to all of its aliases (repo+tag)
+			imageMap := make(map[ImageIDType][]RepoTagType)
+			for _, ti := range tagSlice {
+				for tag, imageID := range ti.TagMap {
+					repotag := RepoTagType{Repo: ti.Repo, Tag: tag}
+
+					if _, ok := imageMap[imageID]; ok {
+						imageMap[imageID] = append(imageMap[imageID], repotag)
+					} else {
+						imageMap[imageID] = []RepoTagType{repotag}
+					}
+				}
+			}
+
 			blog.Info("Get Image Metadata")
 			// Get image metadata
-			metadataSlice, e = getImageMetadata(tagSlice, oldMetadataSet)
+			metadataSlice, e = getImageMetadata(imageMap, oldMetadataSet)
 			if e != nil {
 				blog.Warn(e, " getImageMetadata")
 				blog.Warn("Retrying")
@@ -656,12 +745,21 @@ func GetNewImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo,
 
 	var currentMetadataSlice []ImageMetadataInfo
 	//config.BanyanUpdate("Loading Registry Metadata")
-	switch {
-	case HubAPI == false:
-		tagSlice, currentMetadataSlice = GetImageMetadata(oldMetadataSet)
-	case HubAPI == true:
-		tagSlice, currentMetadataSlice = GetImageMetadataTokenAuthV1(oldMetadataSet)
+	if LocalHost == true {
+		blog.Info("Collect images from local Docker host")
+		currentMetadataSlice = GetLocalImageMetadata(oldMetadataSet)
+		// there is no tag API under Docker Remote API,
+		// and the caller of GetNewImageMetadata ignores tagSlice
+		tagSlice = nil
+	} else {
+		switch {
+		case HubAPI == false:
+			tagSlice, currentMetadataSlice = GetImageMetadata(oldMetadataSet)
+		case HubAPI == true:
+			tagSlice, currentMetadataSlice = GetImageMetadataTokenAuthV1(oldMetadataSet)
+		}
 	}
+
 
 	// get only the new metadata from currentMetadataSlice
 	currentMetadataSet = NewMetadataSet()
@@ -772,27 +870,15 @@ func v2GetTagsMetadata(repoSlice []RepoType) (tagSlice []TagInfo, metadataSlice 
 	return
 }
 
+
 // getImageMetadata queries the Docker registry for info about each image.
-func getImageMetadata(tagSlice []TagInfo, oldMetadataSet MetadataSet) (metadataSlice []ImageMetadataInfo, e error) {
+func getImageMetadata(imageMap map[ImageIDType][]RepoTagType,
+	oldMetadataSet MetadataSet) (metadataSlice []ImageMetadataInfo, e error) {
 
 	metadataMap := NewImageToMetadataMap(oldMetadataSet)
 	previousImages := NewImageSet()
 	for metadata := range oldMetadataSet {
 		previousImages[ImageIDType(metadata.Image)] = true
-	}
-
-	// get map from each imageID to all of its aliases (repo+tag)
-	imageMap := make(map[ImageIDType][]RepoTagType)
-	for _, ti := range tagSlice {
-		for tag, imageID := range ti.TagMap {
-			repotag := RepoTagType{Repo: ti.Repo, Tag: tag}
-
-			if _, ok := imageMap[imageID]; ok {
-				imageMap[imageID] = append(imageMap[imageID], repotag)
-			} else {
-				imageMap[imageID] = []RepoTagType{repotag}
-			}
-		}
 	}
 
 	// for each alias, create an entry in metadataSlice
@@ -827,19 +913,32 @@ func getImageMetadata(tagSlice []TagInfo, oldMetadataSet MetadataSet) (metadataS
 		go func(imageID ImageIDType, ch chan ImageMetadataInfo, errch chan error) {
 			var metadata ImageMetadataInfo
 			blog.Info("Get Metadata for Image: %s", string(imageID))
-			if *RegistryProto == "quay" {
-				// TODO: Properly support quay.io image metadata instead of faking it.
-				t := time.Date(2011, time.January, 1, 1, 0, 0, 0, time.UTC)
-				metadata.Image = string(imageID)
-				metadata.Datetime = t
-				ch <- metadata
-				return
+
+			var response []byte
+			var e error
+
+			if LocalHost {
+				response, e = inspectImage(string(imageID))
+				if e != nil {
+					blog.Info(string(response))
+				}
+			} else {
+				if *RegistryProto == "quay" {
+					// TODO: Properly support quay.io image metadata instead of faking it.
+					t := time.Date(2011, time.January, 1, 1, 0, 0, 0, time.UTC)
+					metadata.Image = string(imageID)
+					metadata.Datetime = t
+					ch <- metadata
+					return
+				}
+				response, e = RegistryQuery(client, RegistryAPIURL+"/v1/images/"+string(imageID)+"/json", BasicAuth)
 			}
-			response, e := RegistryQuery(client, RegistryAPIURL+"/v1/images/"+string(imageID)+"/json", BasicAuth)
+
 			if e != nil {
 				errch <- e
 				return
 			}
+
 			var m ImageStruct
 			if e = json.Unmarshal(response, &m); e != nil {
 				errch <- e
