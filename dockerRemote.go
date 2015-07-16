@@ -204,7 +204,6 @@ func dockerVersion() (major, minor, revision int, err error) {
 		return
 	}
 	version := msg.Version
-	blog.Info("Docker version %s", version)
 	arr := strings.Split(version, ".")
 	if len(arr) >= 1 {
 		major, err = strconv.Atoi(arr[0])

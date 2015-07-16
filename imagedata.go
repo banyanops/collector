@@ -79,13 +79,14 @@ func (s *HTTPStatusCodeError) Error() string {
 }
 
 // RegistryQuery performs an HTTP GET operation from the registry and returns the response.
-func RegistryQuery(client *http.Client, URL, basicAuth string) (response []byte, e error) {
+func RegistryQuery(client *http.Client, URL string) (response []byte, e error) {
+	_, _, BasicAuth, XRegistryAuth = GetRegistryURL()
 	req, e := http.NewRequest("GET", URL, nil)
 	if e != nil {
 		return nil, e
 	}
-	if basicAuth != "" {
-		req.Header.Set("Authorization", "Basic "+basicAuth)
+	if BasicAuth != "" {
+		req.Header.Set("Authorization", "Basic "+BasicAuth)
 	}
 	r, e := client.Do(req)
 	if e != nil {

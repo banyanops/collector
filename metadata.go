@@ -376,30 +376,30 @@ func GetImageMetadataTokenAuthV1(oldMetadataSet MetadataSet) (tagSlice []TagInfo
 		for {
 			indexInfo, e = getReposTokenAuthV1(repo, client)
 			if e != nil {
-				blog.Warn(e, ":index lookup failed, retrying.")
-				config.BanyanUpdate(e.Error(), ":index lookup failed, retrying")
+				blog.Warn(e, ":index lookup failed for repo", string(repo), "- retrying.")
+				config.BanyanUpdate(e.Error(), ":index lookup failed, repo", string(repo), "- retrying")
 				time.Sleep(config.RETRYDURATION)
 				continue
 			}
 
 			repoTagSlice, e = getTagsTokenAuthV1(repo, client, indexInfo)
 			if e != nil {
-				blog.Warn(e, ":tag lookup failed, retrying.")
-				config.BanyanUpdate(e.Error(), ":tag lookup failed, retrying")
+				blog.Warn(e, ":tag lookup failed for repo", string(repo), "- retrying.")
+				config.BanyanUpdate(e.Error(), ":tag lookup failed for repo", string(repo), "- retrying")
 				time.Sleep(config.RETRYDURATION)
 				continue
 			}
 			if len(repoTagSlice) != 1 {
 				blog.Error("Incorrect length of repoTagSlice: expected length=1, got length=%d", len(repoTagSlice))
-				config.BanyanUpdate("Incorrect length of repoTagSlice")
+				config.BanyanUpdate("Incorrect length of repoTagSlice:", strconv.Itoa(len(repoTagSlice)), string(repo))
 				time.Sleep(config.RETRYDURATION)
 				continue
 			}
 
 			repoMetadataSlice, e = getMetadataTokenAuthV1(repoTagSlice[0], metadataMap, client, indexInfo)
 			if e != nil {
-				blog.Warn(e, ":metadata lookup failed, retrying.")
-				config.BanyanUpdate(e.Error(), ":metadata lookup failed, retrying")
+				blog.Warn(e, ":metadata lookup failed for", string(repoTagSlice[0].Repo), "- retrying.")
+				config.BanyanUpdate(e.Error(), ":metadata lookup failed for", string(repoTagSlice[0].Repo), "- retrying")
 				time.Sleep(config.RETRYDURATION)
 				continue
 			}
@@ -438,7 +438,7 @@ func getRepos() (repoSlice []RepoType, err error) {
 	} else {
 		client = &http.Client{}
 	}
-	response, err := RegistryQuery(client, RegistryAPIURL+"/v1/search?q=", BasicAuth)
+	response, err := RegistryQuery(client, RegistryAPIURL+"/v1/search?q=")
 	if err != nil {
 		blog.Error(err)
 		if s, ok := err.(*HTTPStatusCodeError); ok {
@@ -465,8 +465,7 @@ func getRepos() (repoSlice []RepoType, err error) {
 // getReposTokenAuthV1 validates the user-specified list of repositories against an index server, e.g., Docker Hub.
 // It returns a list of IndexInfo structs with index info for each validated repository.
 func getReposTokenAuthV1(repo RepoType, client *http.Client) (indexInfo IndexInfo, e error) {
-	// lookup defines a function that takes a repository name as input and returns
-	// the Docker auth token and registry URL to access that repository.
+	_, _, BasicAuth, XRegistryAuth = GetRegistryURL()
 	URL := RegistryAPIURL + "/v1/repositories/" + string(repo) + "/images"
 	req, e := http.NewRequest("GET", URL, nil)
 	req.Header.Set("X-Docker-Token", "true")
@@ -512,7 +511,7 @@ func v1GetTags(repoSlice []RepoType) (tagSlice []TagInfo, e error) {
 	}
 	for _, repo := range repoSlice {
 		// get tags for one repo
-		response, err := RegistryQuery(client, RegistryAPIURL+"/v1/repositories/"+string(repo)+"/tags", BasicAuth)
+		response, err := RegistryQuery(client, RegistryAPIURL+"/v1/repositories/"+string(repo)+"/tags")
 		if err != nil {
 			blog.Error(err)
 			if s, ok := err.(*HTTPStatusCodeError); ok {
@@ -547,7 +546,7 @@ type V2Manifest struct {
 }
 
 func v2GetMetadata(client *http.Client, repo, tag string) (metadata ImageMetadataInfo, e error) {
-	response, err := RegistryQuery(client, RegistryAPIURL+"/v2/"+repo+"/manifests/"+tag, BasicAuth)
+	response, err := RegistryQuery(client, RegistryAPIURL+"/v2/"+repo+"/manifests/"+tag)
 	if err != nil {
 		blog.Error(err)
 		if s, ok := err.(*HTTPStatusCodeError); ok {
@@ -841,7 +840,7 @@ func v2GetTagsMetadata(repoSlice []RepoType) (tagSlice []TagInfo, metadataSlice 
 	}
 	for _, repo := range repoSlice {
 		// get tags for one repo
-		response, err := RegistryQuery(client, RegistryAPIURL+"/v2/"+string(repo)+"/tags/list", BasicAuth)
+		response, err := RegistryQuery(client, RegistryAPIURL+"/v2/"+string(repo)+"/tags/list")
 		if err != nil {
 			blog.Error(err)
 			if s, ok := err.(*HTTPStatusCodeError); ok {
@@ -931,9 +930,8 @@ func getImageMetadata(imageMap map[ImageIDType][]RepoTagType,
 					ch <- metadata
 					return
 				}
-				response, e = RegistryQuery(client, RegistryAPIURL+"/v1/images/"+string(imageID)+"/json", BasicAuth)
+				response, e := RegistryQuery(client, RegistryAPIURL+"/v1/images/"+string(imageID)+"/json")
 			}
-
 			if e != nil {
 				errch <- e
 				return
