@@ -96,21 +96,22 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 		return
 	}
 
-	var useDotDockerDir bool
-	major, minor, revision, err := dockerVersion()
-	if err != nil {
-		blog.Exit("Could not determine Docker version")
+	if len(DockerConfig) == 0 {
+		major, minor, revision, err := dockerVersion()
+		if err != nil {
+			blog.Exit("Could not determine Docker version")
+		}
+		if major < 1 || (major == 1 && minor <= 2) {
+			blog.Exit("Unsupported docker version %d.%d.%d", major, minor, revision)
+		}
+		if major == 1 && minor <= 6 {
+			DockerConfig = os.Getenv("HOME") + "/.dockercfg"
+		} else {
+			DockerConfig = os.Getenv("HOME") + "/.docker/config.json"
+		}
 	}
-	if major < 1 || (major == 1 && minor <= 2) {
-		blog.Exit("Unsupported docker version %d.%d.%d", major, minor, revision)
-	}
-	if major == 1 && minor <= 6 {
-		DockerConfig = os.Getenv("HOME") + "/.dockercfg"
-		useDotDockerDir = false
-	} else {
-		DockerConfig = os.Getenv("HOME") + "/.docker/config.json"
-		useDotDockerDir = true
-	}
+
+	useDotDockerDir := strings.Contains(DockerConfig, ".docker/config.json")
 
 	data, err := ioutil.ReadFile(DockerConfig)
 	if err != nil {
@@ -118,7 +119,7 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 			blog.Exit("Could not read", DockerConfig)
 		}
 		// new .docker/config.json didn't work, so try the old .dockercfg
-		blog.Error("Could not read %s", DockerConfig)
+		blog.Error("Could not read %s, trying $HOME/.dockercfg", DockerConfig)
 		DockerConfig = os.Getenv("HOME") + "/.dockercfg"
 		useDotDockerDir = false
 		data, err = ioutil.ReadFile(DockerConfig)
