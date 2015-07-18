@@ -918,9 +918,6 @@ func getImageMetadata(imageMap map[ImageIDType][]RepoTagType,
 
 			if LocalHost {
 				response, e = inspectImage(string(imageID))
-				if e != nil {
-					blog.Info(string(response))
-				}
 			} else {
 				if *RegistryProto == "quay" {
 					// TODO: Properly support quay.io image metadata instead of faking it.
@@ -930,7 +927,7 @@ func getImageMetadata(imageMap map[ImageIDType][]RepoTagType,
 					ch <- metadata
 					return
 				}
-				response, e := RegistryQuery(client, RegistryAPIURL+"/v1/images/"+string(imageID)+"/json")
+				response, e = RegistryQuery(client, RegistryAPIURL+"/v1/images/"+string(imageID)+"/json")
 			}
 			if e != nil {
 				errch <- e
