@@ -25,6 +25,7 @@ func TestGetLocalImageMetadata(t *testing.T) {
 	var currentMetadataSlice []ImageMetadataInfo
 	MetadataSet := NewMetadataSet()
 	LocalHost = true
+	ReposToProcess[RepoType(metadata.Repo)] = true
 	currentMetadataSlice = GetLocalImageMetadata(MetadataSet)
 
 	for _, localImage := range(currentMetadataSlice) {

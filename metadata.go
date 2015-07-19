@@ -220,14 +220,27 @@ func getLocalImages() (imageMap map[ImageIDType][]RepoTagType, e error) {
 	for _, localImage := range localImageList {
 		imageID := ImageIDType(localImage.ID)
 		for _, repoTag := range localImage.RepoTags {
+			// skip images with no repo:tag
+			if repoTag == "" {
+				blog.Info("Image ", imageID, " has a repoTag of empty string.")
+				continue
+			}
 			// repoTag example: "localhost:5000/test/busybox:latest"
 			// repo: "localhost:5000/test/busybox"
 			// tag: "latest"
 			ss := strings.Split(repoTag, ":")
+			if len(ss) < 2 {
+				blog.Info("Image ", imageID, " has a wrong repoTag with a wrong format, ", repoTag)
+				continue
+			}
 			tag := ss[len(ss)-1]
 			repo := repoTag[:len(repoTag)-len(tag)-1]
 			blog.Debug(imageID, repoTag, repo, tag)
 
+			// If the map ReposToProcess is not empty, skip images that are not from the the repos in the map
+			if len(ReposToProcess) > 0 && !ReposToProcess[RepoType(repo)] {
+				continue
+			}
 			repotag := RepoTagType{Repo: RepoType(repo), Tag: TagType(tag)}
 
 			if _, ok := imageMap[imageID]; ok {
