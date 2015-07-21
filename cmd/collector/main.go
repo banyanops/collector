@@ -85,12 +85,14 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 			if config.FilterRepos && !collector.ReposToProcess[collector.RepoType(metadata.Repo)] {
 				continue
 			}
+			// TODO: need to filter out images from ExcludedRepo also when collecting from local Docker host?
 			if collector.ExcludeRepo[collector.RepoType(metadata.Repo)] {
 				continue
 			}
 			if pulledImages[collector.ImageIDType(metadata.Image)] {
 				continue
 			}
+			// TODO: need to consider maxImages limit also when collecting from local Docker host?
 			repo := collector.RepoType(metadata.Repo)
 			if _, ok := ReposToLimit[repo]; !ok {
 				// new repo we haven't seen before; apply maxImages limit to repo
@@ -111,9 +113,11 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 			imageCount[collector.RepoType(metadata.Repo)]++
 
 			// docker pull image
-			collector.PullImage(metadata)
+			if !collector.LocalHost {
+				collector.PullImage(metadata)
+			}
 			PulledNew = append(PulledNew, metadata)
-			if *removeThresh > 0 && len(PulledNew) > *removeThresh {
+			if !collector.LocalHost && *removeThresh > 0 && len(PulledNew) > *removeThresh {
 				collector.RemoveImages(PulledNew[0:*removeThresh], imageToMDMap)
 				PulledNew = PulledNew[*removeThresh:]
 			}
@@ -300,7 +304,7 @@ func main() {
 	SetupBanyanStatus(authToken)
 
 	checkConfigUpdate(true)
-	if collector.RegistryAPIURL == "" {
+	if collector.LocalHost == false && collector.RegistryAPIURL == "" {
 		collector.RegistryAPIURL, collector.HubAPI, collector.BasicAuth, collector.XRegistryAuth = collector.GetRegistryURL()
 		blog.Info("registry API URL: %s", collector.RegistryAPIURL)
 	}
