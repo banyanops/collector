@@ -178,6 +178,18 @@ func NewIndexInfoMap() IndexInfoMap {
 	return make(map[RepoType]IndexInfo)
 }
 
+// ImageToRepoTagMap maps image ID to all of its aliases (Repository+Tag).
+type ImageToRepoTagMap map[ImageIDType][]RepoTagType
+
+// inserts repotag into the list of RepoTagTypes for imageID in ImageToRepoTagMap
+func (imageMap ImageToRepoTagMap) Insert(imageID ImageIDType, repotag RepoTagType) {
+	if _, ok := imageMap[imageID]; ok {
+		imageMap[imageID] = append(imageMap[imageID], repotag)
+	} else {
+		imageMap[imageID] = []RepoTagType{repotag}
+	}
+}
+
 // ByDateTime is used to sort ImageMetadataInfo slices by image age from newest to oldest.
 type ByDateTime []ImageMetadataInfo
 
@@ -200,15 +212,34 @@ func GetImageToMDMap(imageMDs []ImageMetadataInfo) (imageToMDMap map[string][]Im
 	return
 }
 
-// getLocalImages queries the local Docker daemon for list of images.
-func getLocalImages() (imageMap map[ImageIDType][]RepoTagType, e error) {
+// CheckRepoToProcess returns true if ReposToProcess is empty
+// or if the given repo string ends with one of the repo names in ReposToProcess.
+// The 2nd condition is needed to handle local image metadata including registry info in repository info.
+func CheckRepoToProcess(repo string) bool {
+	if len(ReposToProcess) == 0 {
+		return true
+	}
+
+	for keyRepo, valBool := range(ReposToProcess) {
+		if strings.HasSuffix(repo, string(keyRepo)) {
+			if valBool {
+				return true
+			} else {
+				return false
+			}
+		}
+	}
+	return false
+}
+
+// GetLocalImages queries the local Docker daemon for list of images.
+func GetLocalImages() (imageMap ImageToRepoTagMap, e error) {
 
 	// query a list of images from Docker daemon
 	response, e := listImages()
 	if e != nil {
 		return nil, e
 	}
-	blog.Info(string(response))
 	// parse JSON
 	var localImageList []LocalImageStruct
 	if e = json.Unmarshal(response, &localImageList); e != nil {
@@ -216,37 +247,32 @@ func getLocalImages() (imageMap map[ImageIDType][]RepoTagType, e error) {
 	}
 
 	// make map from each imageID to all of its aliases (repo+tag)
-	imageMap = make(map[ImageIDType][]RepoTagType)
+	imageMap = make(ImageToRepoTagMap)
 	for _, localImage := range localImageList {
 		imageID := ImageIDType(localImage.ID)
 		for _, repoTag := range localImage.RepoTags {
 			// skip images with no repo:tag
-			if repoTag == "" {
-				blog.Info("Image ", imageID, " has a repoTag of empty string.")
+			if repoTag == "" || repoTag == "\u003cnone\u003e:\u003cnone\u003e" || repoTag == "<none>:<none>" {
+				blog.Info("Image ", imageID, " has a <none>:<none> repository:tag.")
 				continue
 			}
+			// repoTag info of local images queried from local Docker daemon may include registry info
 			// repoTag example: "localhost:5000/test/busybox:latest"
+			// we currently keep the registry info. Altenatively, we would drop it.
 			// repo: "localhost:5000/test/busybox"
 			// tag: "latest"
 			ss := strings.Split(repoTag, ":")
-			if len(ss) < 2 {
-				blog.Info("Image ", imageID, " has a wrong repoTag with a wrong format, ", repoTag)
+			if len(ss) < 2 || len(ss) > 3 {
+				blog.Warn("Image ", imageID, " has a wrong repoTag with a wrong format, ", repoTag)
 				continue
 			}
 			tag := ss[len(ss)-1]
 			repo := repoTag[:len(repoTag)-len(tag)-1]
 			blog.Debug(imageID, repoTag, repo, tag)
 
-			// If the map ReposToProcess is not empty, skip images that are not from the the repos in the map
-			if len(ReposToProcess) > 0 && !ReposToProcess[RepoType(repo)] {
-				continue
-			}
-			repotag := RepoTagType{Repo: RepoType(repo), Tag: TagType(tag)}
-
-			if _, ok := imageMap[imageID]; ok {
-				imageMap[imageID] = append(imageMap[imageID], repotag)
-			} else {
-				imageMap[imageID] = []RepoTagType{repotag}
+			if CheckRepoToProcess(repo) {
+				repotag := RepoTagType{Repo: RepoType(repo), Tag: TagType(tag)}
+				imageMap.Insert(imageID, repotag)
 			}
 		}
 	}
@@ -258,9 +284,9 @@ func getLocalImages() (imageMap map[ImageIDType][]RepoTagType, e error) {
 func GetLocalImageMetadata(oldMetadataSet MetadataSet) (metadataSlice []ImageMetadataInfo) {
 	for {
 		blog.Info("Get a list of images from local Docker daemon")
-		imageMap, e := getLocalImages()
+		imageMap, e := GetLocalImages()
 		if e != nil {
-			blog.Warn(e, " getLocalImages")
+			blog.Warn(e, " GetLocalImages")
 			blog.Warn("Retrying")
 			time.Sleep(config.RETRYDURATION)
 			continue
@@ -270,7 +296,7 @@ func GetLocalImageMetadata(oldMetadataSet MetadataSet) (metadataSlice []ImageMet
 		// Get image metadata
 		metadataSlice, e = getImageMetadata(imageMap, oldMetadataSet)
 		if e != nil {
-			blog.Warn(e, " getImageMetadata")
+			blog.Warn(e, " GetImageMetadata")
 			blog.Warn("Retrying")
 			time.Sleep(config.RETRYDURATION)
 			continue
@@ -321,16 +347,12 @@ func GetImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataS
 			}
 
 			// get map from each imageID to all of its aliases (repo+tag)
-			imageMap := make(map[ImageIDType][]RepoTagType)
+			imageMap := make(ImageToRepoTagMap)
 			for _, ti := range tagSlice {
 				for tag, imageID := range ti.TagMap {
 					repotag := RepoTagType{Repo: ti.Repo, Tag: tag}
 
-					if _, ok := imageMap[imageID]; ok {
-						imageMap[imageID] = append(imageMap[imageID], repotag)
-					} else {
-						imageMap[imageID] = []RepoTagType{repotag}
-					}
+					imageMap.Insert(imageID, repotag)
 				}
 			}
 
