@@ -17,7 +17,7 @@ The collector can be run in one of two modes: (a) as a standalone executable (b)
     $ go get -u github.com/banyanops/collector/...
     $ cd <COLLECTOR_SOURCE_DIR>; sudo COLLECTOR_DIR=$PWD $GOPATH/bin/collector <REGISTRY> <REPO>
 
-where REGISTRY is either a private registry (e.g., http://reg.myorg.com) or Docker Hub (index.docker.io), and REPO is a repository for which you'd like to collect data. For a private registry (with search enabled), if no REPO is specified, data is collected from all the repositories.
+where REGISTRY is either a private registry (e.g., http://reg.myorg.com) or Docker Hub (index.docker.io), and REPO is a repository for which you'd like to collect data. For a private registry (with search enabled), if no REPO is specified, data is collected from all the repositories. Collector also supports the Google Container Registry (*.gcr.io), quay.io, and collecting from local images instead of pulling from a registry (by specifying "local.host" as the REGISTRY).
 
 (b) To run the collector in a container, please follow instructions on [Docker Hub](https://registry.hub.docker.com/u/banyanops/collector/).
 
