@@ -213,23 +213,39 @@ func GetImageToMDMap(imageMDs []ImageMetadataInfo) (imageToMDMap map[string][]Im
 }
 
 // CheckRepoToProcess returns true if ReposToProcess is empty
-// or if the given repo string ends with one of the repo names in ReposToProcess.
-// The 2nd condition is needed to handle local image metadata including registry info in repository info.
-func CheckRepoToProcess(repo string) bool {
+// or if the given repo exists in ReposToProcess.
+func CheckRepoToProcess(repo RepoType) bool {
 	if len(ReposToProcess) == 0 {
 		return true
 	}
+	// just check the presence of the key. Value doesn't matter.  
+	_, ok := ReposToProcess[repo]
+	return ok
+}
 
-	for keyRepo, valBool := range(ReposToProcess) {
-		if strings.HasSuffix(repo, string(keyRepo)) {
-			if valBool {
-				return true
-			} else {
-				return false
-			}
-		}
+// repoTag info of local images queried from local Docker daemon may include a registry name
+// example: "localhost:5000/test/busybox:latest" in
+// "localhost:5000" is a registry
+// "test/busybox" is a repository
+// "latest" is a tag
+// ExtractRepoTag strips out registry and returns repo and tag in RepoTagType
+func ExtractRepoTag(regRepoTag string) (repoTag RepoTagType, e error) {
+
+	ss := strings.Split(regRepoTag, ":")
+	if len(ss) < 2 || len(ss) > 3 {
+		e := errors.New("regRepoTag string has a wrong format: " + regRepoTag)
+		return repoTag, e
 	}
-	return false
+	tag := ss[len(ss)-1]	// the last component is a tag
+	regRepo := regRepoTag[:len(regRepoTag)-len(tag)-1]  // the remainder as registry + repository
+
+	ss = strings.Split(regRepo, "/")
+	if len(ss) > 1 && strings.ContainsAny(ss[0], ".:") {
+		// ss[0] is a registry name, strip it out
+		regRepo = regRepo[len(ss[0])+1:]
+	}
+	repoTag = RepoTagType{Repo: RepoType(regRepo), Tag: TagType(tag)}
+	return repoTag, e
 }
 
 // GetLocalImages queries the local Docker daemon for list of images.
@@ -250,29 +266,21 @@ func GetLocalImages() (imageMap ImageToRepoTagMap, e error) {
 	imageMap = make(ImageToRepoTagMap)
 	for _, localImage := range localImageList {
 		imageID := ImageIDType(localImage.ID)
-		for _, repoTag := range localImage.RepoTags {
+		for _, regRepoTag := range localImage.RepoTags {
 			// skip images with no repo:tag
-			if repoTag == "" || repoTag == "\u003cnone\u003e:\u003cnone\u003e" || repoTag == "<none>:<none>" {
+			if regRepoTag == "" || regRepoTag == "\u003cnone\u003e:\u003cnone\u003e" || regRepoTag == "<none>:<none>" {
 				blog.Info("Image ", imageID, " has a <none>:<none> repository:tag.")
 				continue
 			}
-			// repoTag info of local images queried from local Docker daemon may include registry info
-			// repoTag example: "localhost:5000/test/busybox:latest"
-			// we currently keep the registry info. Altenatively, we would drop it.
-			// repo: "localhost:5000/test/busybox"
-			// tag: "latest"
-			ss := strings.Split(repoTag, ":")
-			if len(ss) < 2 || len(ss) > 3 {
-				blog.Warn("Image ", imageID, " has a wrong repoTag with a wrong format, ", repoTag)
-				continue
-			}
-			tag := ss[len(ss)-1]
-			repo := repoTag[:len(repoTag)-len(tag)-1]
-			blog.Debug(imageID, repoTag, repo, tag)
 
-			if CheckRepoToProcess(repo) {
-				repotag := RepoTagType{Repo: RepoType(repo), Tag: TagType(tag)}
-				imageMap.Insert(imageID, repotag)
+			repoTag, e := ExtractRepoTag(regRepoTag)
+			if e != nil {
+				return nil, e
+			}
+			blog.Debug(imageID, regRepoTag, repoTag)
+
+			if CheckRepoToProcess(repoTag.Repo) {
+				imageMap.Insert(imageID, repoTag)
 			}
 		}
 	}
