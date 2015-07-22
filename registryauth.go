@@ -20,6 +20,8 @@ const ()
 var (
 	// HubAPI indicates whether to use the Docker Hub API.
 	HubAPI        bool
+	// LocalHost indicates whether to collect images from local host
+	LocalHost		bool
 	HTTPSRegistry = flag.Bool([]string{"-registryhttps"}, true,
 		"Set to false if registry does not need HTTPS (SSL/TLS)")
 	AuthRegistry = flag.Bool([]string{"-registryauth"}, true,

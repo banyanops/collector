@@ -340,3 +340,28 @@ func removeContainer(containerID string) (resp []byte, err error) {
 	blog.Debug("Response from docker remote API call for remove: " + string(resp))
 	return
 }
+
+
+// listImages makes a docker remote API call to get a list of images
+func listImages() (resp []byte, err error) {
+	apipath := "/images/json"
+	resp, err = doDockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
+	if err != nil {
+		blog.Error(err)
+		return
+	}
+	blog.Debug("Response from docker remote API call for list images: " + string(resp))
+	return
+}
+
+func inspectImage(imageID string) (resp []byte, err error) {
+	apipath := "/images/" + imageID + "/json"
+	resp, err = doDockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
+	if err != nil {
+		blog.Error(err)
+		return
+	}
+	blog.Debug("Response from docker remote API call for inspect image " + imageID + " : \n" + string(resp))
+	return
+}
+
