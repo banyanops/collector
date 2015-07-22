@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/credentialprovider"
+	gcr "github.com/banyanops/collector/gcr"
 	blog "github.com/ccpaging/log4go"
 	flag "github.com/docker/docker/pkg/mflag"
 )
@@ -29,6 +32,10 @@ var (
 		"Registry uses v1 Token Auth, e.g., Docker Hub, Google Container Registry")
 	RegistryTLSNoVerify = flag.Bool([]string{"-registrytlsnoverify"}, false,
 		"True to trust the registry without verifying certificate")
+	GCRMetadata = flag.Bool([]string{"-gcr-metadata"}, false,
+		"True to query GCE instance metadata for Docker credentials")
+	GCRKeyFile = flag.String([]string{"-gcr-key-file"}, "",
+		"Set to the pathname of the GCE service account JSON key")
 	// registryspec is the host.domainname of the registry
 	RegistrySpec string
 	// registryAPIURL is the http(s)://[user:password@]host.domainname of the registry
@@ -94,6 +101,13 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 	if *AuthRegistry == false {
 		fullRegistry = registry
 		return
+	}
+
+	if *GCRMetadata {
+		return GCRMetadataRegAuth(registry)
+	}
+	if *GCRKeyFile > "" {
+		return GCRKeyFileRegAuth(registry)
 	}
 
 	if len(DockerConfig) == 0 {
@@ -164,6 +178,55 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 		}
 	}
 	return
+}
+
+// globMatch returns true iff registry matches glob.
+func globMatch(registry, glob string) bool {
+	registryParts := strings.Split(registry, ".")
+	globParts := strings.Split(glob, ".")
+	if len(globParts) != len(registryParts) {
+		return false
+	}
+	for i, globPart := range globParts {
+		matched, e := filepath.Match(globPart, registryParts[i])
+		if e != nil {
+			return false
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
+
+// GCRAuth parses the credentialprovider.DockerConfig to get Docker registry credentials.
+func GCRAuth(registry string, dockerConfig credentialprovider.DockerConfig) (basicAuth, fullRegistry, authConfig string) {
+	for glob := range dockerConfig {
+		if !globMatch(registry, glob) {
+			continue
+		}
+		entry := dockerConfig[glob]
+		fieldValue := entry.Username + ":" + entry.Password
+		basicAuth = base64.StdEncoding.EncodeToString([]byte(fieldValue))
+		authConfig = getAuthConfig(entry.Username, entry.Password, basicAuth, entry.Email, registry)
+		fullRegistry = "https://" + registry
+		return
+	}
+	return
+}
+
+// GCRMetadataRegAuth queries GCE instance metadata to get Docker registry credentials.
+func GCRMetadataRegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
+	gcr.MetadataInit()
+	dockerConfig := gcr.Metadata()
+	return GCRAuth(registry, dockerConfig)
+}
+
+// GCRKeyFileRegAuth uses a GCE service account JSON key to get Docker registry credentials.
+func GCRKeyFileRegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
+	gcr.JWTInit(*GCRKeyFile)
+	dockerConfig := gcr.JWT()
+	return GCRAuth(registry, dockerConfig)
 }
 
 // AuthConfig is a Registry auth info type
