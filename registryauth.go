@@ -19,9 +19,9 @@ const ()
 
 var (
 	// HubAPI indicates whether to use the Docker Hub API.
-	HubAPI        bool
+	HubAPI bool
 	// LocalHost indicates whether to collect images from local host
-	LocalHost		bool
+	LocalHost     bool
 	HTTPSRegistry = flag.Bool([]string{"-registryhttps"}, true,
 		"Set to false if registry does not need HTTPS (SSL/TLS)")
 	AuthRegistry = flag.Bool([]string{"-registryauth"}, true,
@@ -32,9 +32,9 @@ var (
 		"Registry uses v1 Token Auth, e.g., Docker Hub, Google Container Registry")
 	RegistryTLSNoVerify = flag.Bool([]string{"-registrytlsnoverify"}, false,
 		"True to trust the registry without verifying certificate")
-	GCRMetadata = flag.Bool([]string{"-gcr-metadata"}, false,
+	GCEMetadata = flag.Bool([]string{"-gce-metadata"}, false,
 		"True to query GCE instance metadata for Docker credentials")
-	GCRKeyFile = flag.String([]string{"-gcr-key-file"}, "",
+	GCEKeyFile = flag.String([]string{"-gce-key-file"}, "",
 		"Set to the pathname of the GCE service account JSON key")
 	// registryspec is the host.domainname of the registry
 	RegistrySpec string
@@ -103,11 +103,11 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 		return
 	}
 
-	if *GCRMetadata {
-		return GCRMetadataRegAuth(registry)
+	if *GCEMetadata {
+		return GCEMetadataRegAuth(registry)
 	}
-	if *GCRKeyFile > "" {
-		return GCRKeyFileRegAuth(registry)
+	if *GCEKeyFile > "" {
+		return GCEKeyFileRegAuth(registry)
 	}
 
 	if len(DockerConfig) == 0 {
@@ -215,16 +215,16 @@ func GCRAuth(registry string, dockerConfig credentialprovider.DockerConfig) (bas
 	return
 }
 
-// GCRMetadataRegAuth queries GCE instance metadata to get Docker registry credentials.
-func GCRMetadataRegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
+// GCEMetadataRegAuth queries GCE instance metadata to get Docker registry credentials.
+func GCEMetadataRegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 	gcr.MetadataInit()
 	dockerConfig := gcr.Metadata()
 	return GCRAuth(registry, dockerConfig)
 }
 
-// GCRKeyFileRegAuth uses a GCE service account JSON key to get Docker registry credentials.
-func GCRKeyFileRegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
-	gcr.JWTInit(*GCRKeyFile)
+// GCEKeyFileRegAuth uses a GCE service account JSON key to get Docker registry credentials.
+func GCEKeyFileRegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
+	gcr.JWTInit(*GCEKeyFile)
 	dockerConfig := gcr.JWT()
 	return GCRAuth(registry, dockerConfig)
 }
