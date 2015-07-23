@@ -112,7 +112,6 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 
 			imageCount[collector.RepoType(metadata.Repo)]++
 
-			blog.Info("About to pull image for metadata %v", metadata)
 			// docker pull image
 			if !collector.LocalHost {
 				collector.PullImage(metadata)

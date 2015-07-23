@@ -269,7 +269,7 @@ func GetLocalImages() (imageMap ImageToRepoTagMap, e error) {
 		for _, regRepoTag := range localImage.RepoTags {
 			// skip images with no repo:tag
 			if regRepoTag == "" || regRepoTag == "\u003cnone\u003e:\u003cnone\u003e" || regRepoTag == "<none>:<none>" {
-				blog.Info("Image ", imageID, " has a <none>:<none> repository:tag.")
+				blog.Info("Image %s has a <none>:<none> repository:tag.", string(imageID))
 				continue
 			}
 
