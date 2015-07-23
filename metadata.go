@@ -1091,6 +1091,7 @@ func SaveImageMetadata(metadataSlice []ImageMetadataInfo) {
 }
 
 // ValidRepoName verifies that the name of a repo is in a legal format.
+// A valid name can optionally include a wildcard "*" but only as the last character.
 func ValidRepoName(name string) bool {
 	if len(name) == 0 {
 		return false
@@ -1099,7 +1100,7 @@ func ValidRepoName(name string) bool {
 		blog.Error("Invalid repo name, too long: %s", name)
 		return false
 	}
-	for _, c := range name {
+	for i, c := range name {
 		switch {
 		case c >= 'a' && c <= 'z':
 			continue
@@ -1108,6 +1109,8 @@ func ValidRepoName(name string) bool {
 		case c >= '0' && c <= '9':
 			continue
 		case c == '/' || c == '_' || c == '-' || c == '.':
+			continue
+		case c == '*' && i == len(name)-1:
 			continue
 		default:
 			blog.Error("Invalid repo name %s", name)
