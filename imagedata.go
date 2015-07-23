@@ -28,14 +28,14 @@ type ImageDataInfo struct {
 func PullImage(metadata ImageMetadataInfo) {
 	tagspec := RegistrySpec + "/" + metadata.Repo + ":" + metadata.Tag
 	apipath := "/images/create?fromImage=" + tagspec
-	blog.Info("PullImages downloading %s, Image ID: %s", apipath, metadata.Image)
+	blog.Info("PullImage downloading %s, Image ID: %s", apipath, metadata.Image)
 	config.BanyanUpdate("Pull", apipath, metadata.Image)
 	resp, err := doDockerAPI(DockerTransport, "POST", apipath, []byte{}, XRegistryAuth)
 	if err != nil {
-		blog.Error(err, "PullImages failed for", RegistrySpec, metadata.Repo, metadata.Tag, metadata.Image)
+		blog.Error(err, "PullImage failed for", RegistrySpec, metadata.Repo, metadata.Tag, metadata.Image)
 	}
 	if strings.Contains(string(resp), `"error":`) {
-		blog.Error("PullImages error for %s/%s/%s", RegistrySpec, metadata.Repo, metadata.Tag)
+		blog.Error("PullImage error for %s/%s/%s", RegistrySpec, metadata.Repo, metadata.Tag)
 	}
 	blog.Trace(string(resp))
 	return

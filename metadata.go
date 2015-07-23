@@ -165,9 +165,9 @@ type ImageStruct struct {
 // LocalImageStruct records information returned by the local daemon to describe an image,ff
 // in a response to List Image query.
 type LocalImageStruct struct {
-	ID       string 	`json:"Id"`
-	Parent   string		`json:"ParentId"`
-	RepoTags []string	`json:"RepoTags"`
+	ID       string   `json:"Id"`
+	Parent   string   `json:"ParentId"`
+	RepoTags []string `json:"RepoTags"`
 }
 
 // IndexInfoMap maps repository name to the corresponding Docker Hub auth/index info.
@@ -218,7 +218,7 @@ func CheckRepoToProcess(repo RepoType) bool {
 	if len(ReposToProcess) == 0 {
 		return true
 	}
-	// just check the presence of the key. Value doesn't matter.  
+	// just check the presence of the key. Value doesn't matter.
 	_, ok := ReposToProcess[repo]
 	return ok
 }
@@ -236,8 +236,8 @@ func ExtractRepoTag(regRepoTag string) (repoTag RepoTagType, e error) {
 		e := errors.New("regRepoTag string has a wrong format: " + regRepoTag)
 		return repoTag, e
 	}
-	tag := ss[len(ss)-1]	// the last component is a tag
-	regRepo := regRepoTag[:len(regRepoTag)-len(tag)-1]  // the remainder as registry + repository
+	tag := ss[len(ss)-1]                               // the last component is a tag
+	regRepo := regRepoTag[:len(regRepoTag)-len(tag)-1] // the remainder as registry + repository
 
 	ss = strings.Split(regRepo, "/")
 	if len(ss) > 1 && strings.ContainsAny(ss[0], ".:") {
@@ -391,6 +391,25 @@ func GetImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataS
 	return
 }
 
+// NeedRegistrySearch checks ReposToProcess and returns the search term to use
+// if the registry search API needs to be invoked, else "".
+func NeedRegistrySearch() (searchTerm string) {
+	if len(ReposToProcess) != 1 {
+		return ""
+	}
+	for repo, _ := range ReposToProcess {
+		if strings.HasSuffix(string(repo), "*") {
+			searchTerm := strings.Replace(string(repo), "*", "", 1)
+			if strings.HasSuffix(searchTerm, "/") {
+				searchTerm = searchTerm[:len(searchTerm)-1]
+			}
+			config.FilterRepos = false
+			return searchTerm
+		}
+	}
+	return ""
+}
+
 // GetImageMetadataTokenAuthV1 returns repositories/tags/image metadata from the Docker Hub
 // or other registry using v1 token authorization.
 // The user must have specified a set of repositories of interest.
@@ -404,7 +423,25 @@ func GetImageMetadataTokenAuthV1(oldMetadataSet MetadataSet) (tagSlice []TagInfo
 
 	metadataMap := NewImageToMetadataMap(oldMetadataSet)
 
-	for repo := range ReposToProcess {
+	allRepos := []RepoType{}
+	// Check if we need to use the search API, i.e. only one repo given, and ends in wildcard "*".
+	if searchTerm := NeedRegistrySearch(); searchTerm != "" {
+		blog.Info("Using search API")
+		var e error
+		allRepos, e = registrySearchV1(client, searchTerm)
+		if e != nil {
+			blog.Error(e, ":registry search")
+			return
+		}
+	}
+	// If search wasn't needed, the repos were individually specified.
+	if len(allRepos) == 0 {
+		for repo := range ReposToProcess {
+			allRepos = append(allRepos, repo)
+		}
+	}
+
+	for _, repo := range allRepos {
 		blog.Info("Get index and tag info for %s", string(repo))
 		config.BanyanUpdate("Get index and tag info for", string(repo))
 
@@ -455,6 +492,32 @@ func GetImageMetadataTokenAuthV1(oldMetadataSet MetadataSet) (tagSlice []TagInfo
 	return
 }
 
+// registrySearchV1 queries the Docker registry, returning a slice of repos.
+func registrySearchV1(client *http.Client, searchTerm string) (repoSlice []RepoType, err error) {
+	response, err := RegistryQuery(client, RegistryAPIURL+"/v1/search?q="+searchTerm)
+	if err != nil {
+		blog.Error(err)
+		if s, ok := err.(*HTTPStatusCodeError); ok {
+			blog.Error("HTTP bad status code %d from registry %s using --registryhttps=%v --registryauth=%v --registryproto=%s", s.StatusCode, RegistryAPIURL, *HTTPSRegistry, *AuthRegistry, *RegistryProto)
+		}
+		return
+	}
+
+	// parse the JSON response body and populate repo slice
+	var result registrySearchResult
+	if err = json.Unmarshal(response, &result); err != nil {
+		blog.Error(err, "unmarshal", string(response))
+		return
+	}
+	for _, elem := range result.Results {
+		if ExcludeRepo[RepoType(elem.Name)] {
+			continue
+		}
+		repoSlice = append(repoSlice, RepoType(elem.Name))
+	}
+	return
+}
+
 // getRepos queries the Docker registry for the list of the repositories it is currently hosting.
 // However, if the user specified a list of repositories, then getRepos() just returns that list
 // of specified repositories and does not query the Docker registry.
@@ -481,28 +544,7 @@ func getRepos() (repoSlice []RepoType, err error) {
 	} else {
 		client = &http.Client{}
 	}
-	response, err := RegistryQuery(client, RegistryAPIURL+"/v1/search?q=")
-	if err != nil {
-		blog.Error(err)
-		if s, ok := err.(*HTTPStatusCodeError); ok {
-			blog.Error("HTTP bad status code %d from registry %s using --registryhttps=%v --registryauth=%v --registryproto=%s", s.StatusCode, RegistryAPIURL, *HTTPSRegistry, *AuthRegistry, *RegistryProto)
-		}
-		return
-	}
-
-	// parse the JSON response body and populate repo slice
-	var result registrySearchResult
-	if err = json.Unmarshal(response, &result); err != nil {
-		blog.Error(err, "unmarshal", string(response))
-		return
-	}
-	for _, elem := range result.Results {
-		if ExcludeRepo[RepoType(elem.Name)] {
-			continue
-		}
-		repoSlice = append(repoSlice, RepoType(elem.Name))
-	}
-	return
+	return registrySearchV1(client, "")
 }
 
 // getReposTokenAuthV1 validates the user-specified list of repositories against an index server, e.g., Docker Hub.
@@ -802,7 +844,6 @@ func GetNewImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo,
 		}
 	}
 
-
 	// get only the new metadata from currentMetadataSlice
 	currentMetadataSet = NewMetadataSet()
 	for _, metadata := range currentMetadataSlice {
@@ -911,7 +952,6 @@ func v2GetTagsMetadata(repoSlice []RepoType) (tagSlice []TagInfo, metadataSlice 
 	}
 	return
 }
-
 
 // getImageMetadata queries the Docker registry for info about each image.
 func getImageMetadata(imageMap map[ImageIDType][]RepoTagType,

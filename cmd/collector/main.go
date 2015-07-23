@@ -112,6 +112,7 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 
 			imageCount[collector.RepoType(metadata.Repo)]++
 
+			blog.Info("About to pull image for metadata %v", metadata)
 			// docker pull image
 			if !collector.LocalHost {
 				collector.PullImage(metadata)
@@ -228,17 +229,22 @@ func checkRepoList(initial bool) (updates bool) {
 		}
 	}
 
-	//if len(collector.ReposToProcess) > 0 {
-	if len(newList) > 0 {
-		config.FilterRepos = true
-		if updates {
-			blog.Info("Limiting collection to the following repos:")
-			for repo := range newList {
-				blog.Info(repo)
-			}
-		}
+	if len(newList) == 0 {
+		collector.ReposToProcess = newList
+		return
 	}
 	collector.ReposToProcess = newList
+	if searchTerm := collector.NeedRegistrySearch(); searchTerm != "" {
+		config.FilterRepos = false
+	} else {
+		config.FilterRepos = true
+	}
+	if updates {
+		blog.Info("Limiting collection to the following repos:")
+		for repo := range newList {
+			blog.Info(repo)
+		}
+	}
 	return
 }
 
@@ -255,7 +261,7 @@ func setupLogging() {
 	blog.AddFilter("file", FILELOGLEVEL, flw)
 }
 
-// copyBanyanData copies all the default scripts and binaries (e.g., bash-static, python-static, etcollector.)
+// copyBanyanData copies all the default scripts and binaries (e.g., bash-static, python-static, etc.)
 // to BANYANDIR (so that it can be mounted into collector/target containers)
 func copyBanyanData() {
 	fsutil.CopyDir(config.COLLECTORDIR()+"/data/defaultscripts", collector.DefaultScriptsDir)
