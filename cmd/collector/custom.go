@@ -101,7 +101,13 @@ func SetOutputWriters(authToken string) {
 }
 
 func RegisterCollector() (token string) {
-	return ""
+	token = ""
+	return
+}
+
+func refreshToken(currToken string) (newToken string) {
+	newToken = currToken
+	return
 }
 
 func SetupBanyanStatus(authToken string) {

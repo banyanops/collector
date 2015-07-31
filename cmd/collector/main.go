@@ -283,6 +283,7 @@ func InfLoop(authToken string, processedImages collector.ImageSet, MetadataSet c
 		config.BanyanUpdate("Sleeping for", strconv.FormatInt(*poll, 10), "seconds")
 		time.Sleep(duration)
 		checkConfigUpdate(false)
+		authToken = refreshToken(authToken)
 	}
 }
 
