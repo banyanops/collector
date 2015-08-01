@@ -68,7 +68,7 @@ func TestPostDockerAPI(t *testing.T) {
 		`"/banyancollector/bash-static" ], "Image": "ubuntu", "WorkingDir": "", "HostConfig": { ` +
 		`"Binds": [ "` + os.Getenv("PWD") + `/docker/data:/banyancollector:ro" ], "Links": null, ` +
 		`"Privileged": false, "VolumesFrom": null } }`)
-	resp, err := doDockerAPI(tr, "POST", apipath, jsonString, "")
+	resp, err := DockerAPI(tr, "POST", apipath, jsonString, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -50,22 +50,22 @@ func (sh ScriptInfo) Run(imageID ImageIDType) (b []byte, err error) {
 		return
 	}
 	blog.Debug("Container spec: %s", string(jsonString))
-	containerID, err := createContainer(jsonString)
+	containerID, err := CreateContainer(jsonString)
 	if err != nil {
 		blog.Error(err, ": Error in creating container")
 		return
 	}
 	blog.Debug("New container ID: %s", containerID)
 
-	defer removeContainer(containerID)
+	defer RemoveContainer(containerID)
 
-	jsonString, err = startContainer(containerID)
+	jsonString, err = StartContainer(containerID)
 	if err != nil {
 		blog.Error(err, ": Error in starting container")
 		return
 	}
-	blog.Debug("Response from startContainer: %s", string(jsonString))
-	statusCode, err := waitContainer(containerID)
+	blog.Debug("Response from StartContainer: %s", string(jsonString))
+	statusCode, err := WaitContainer(containerID)
 	if err != nil {
 		blog.Error(err, ": Error in waiting for container to stop")
 		return
@@ -74,7 +74,7 @@ func (sh ScriptInfo) Run(imageID ImageIDType) (b []byte, err error) {
 		err = errors.New("Bash script exit status: " + strconv.Itoa(statusCode))
 		return
 	}
-	b, err = logsContainer(containerID)
+	b, err = LogsContainer(containerID)
 	if err != nil {
 		blog.Error(err, ":Error in extracting output from container")
 		return

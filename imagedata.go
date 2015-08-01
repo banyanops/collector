@@ -30,7 +30,7 @@ func PullImage(metadata ImageMetadataInfo) {
 	apipath := "/images/create?fromImage=" + tagspec
 	blog.Info("PullImage downloading %s, Image ID: %s", apipath, metadata.Image)
 	config.BanyanUpdate("Pull", apipath, metadata.Image)
-	resp, err := doDockerAPI(DockerTransport, "POST", apipath, []byte{}, XRegistryAuth)
+	resp, err := DockerAPI(DockerTransport, "POST", apipath, []byte{}, XRegistryAuth)
 	if err != nil {
 		blog.Error(err, "PullImage failed for", RegistrySpec, metadata.Repo, metadata.Tag, metadata.Image)
 	}
@@ -56,7 +56,7 @@ func RemoveImages(PulledImages []ImageMetadataInfo, imageToMDMap map[string][]Im
 			apipath := "/images/" + RegistrySpec + "/" + metadata.Repo + ":" + metadata.Tag
 			blog.Info("RemoveImages %s", apipath)
 			config.BanyanUpdate("Remove", apipath)
-			_, err := doDockerAPI(DockerTransport, "DELETE", apipath, []byte{}, "")
+			_, err := DockerAPI(DockerTransport, "DELETE", apipath, []byte{}, "")
 			if err != nil {
 				blog.Error(err, "RemoveImages Repo:Tag", metadata.Repo, metadata.Tag,
 					"image", metadata.Image)

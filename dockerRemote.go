@@ -43,7 +43,7 @@ type HostConfig struct {
 	VolumesFrom []string
 }
 
-type Container struct {
+type ContainerConfig struct {
 	User         string
 	AttachStdin  bool
 	AttachStdout bool
@@ -53,8 +53,18 @@ type Container struct {
 	Cmd          []string
 	Entrypoint   []string
 	Image        string
+	Labels       map[string]string
 	WorkingDir   string
-	HostConfig   HostConfig
+}
+
+type Container struct {
+	ContainerConfig
+	HostConfig HostConfig
+}
+
+type ContainerInspection struct {
+	Config     ContainerConfig
+	HostConfig HostConfig
 }
 
 func NewTLSTransport(hostpath string, certfile, cafile, keyfile string) (transport *http.Transport, err error) {
@@ -134,8 +144,8 @@ func NewDockerTransport(proto, addr string) (tr *http.Transport, e error) {
 	return
 }
 
-// doDockerAPI performs an HTTP GET,POST,DELETE operation to the Docker daemon.
-func doDockerAPI(tr *http.Transport, operation, apipath string, jsonString []byte,
+// DockerAPI performs an HTTP GET,POST,DELETE operation to the Docker daemon.
+func DockerAPI(tr *http.Transport, operation, apipath string, jsonString []byte,
 	XRegistryAuth string) (resp []byte, e error) {
 	switch operation {
 	case "GET", "POST", "DELETE":
@@ -156,10 +166,10 @@ func doDockerAPI(tr *http.Transport, operation, apipath string, jsonString []byt
 		}
 	}
 	URL := HTTP + host + apipath
-	blog.Debug("doDockerAPI %s", URL)
+	blog.Debug("DockerAPI %s", URL)
 	req, e := http.NewRequest(operation, URL, bytes.NewBuffer(jsonString))
 	if e != nil {
-		blog.Error(e, ":doDockerAPI failed to create http request")
+		blog.Error(e, ":DockerAPI failed to create http request")
 		return
 	}
 	req.Header.Add("Content-Type", "application/json")
@@ -171,17 +181,17 @@ func doDockerAPI(tr *http.Transport, operation, apipath string, jsonString []byt
 	client := &http.Client{Transport: tr}
 	r, e := client.Do(req)
 	if e != nil {
-		blog.Error(e, ":doDockerAPI URL", URL, "client request failed")
+		blog.Error(e, ":DockerAPI URL", URL, "client request failed")
 		return
 	}
 	defer r.Body.Close()
 	resp, e = ioutil.ReadAll(r.Body)
 	if e != nil {
-		blog.Error(e, ":doDockerAPI URL", URL, "invalid response body")
+		blog.Error(e, ":DockerAPI URL", URL, "invalid response body")
 		return
 	}
 	if r.StatusCode < 200 || r.StatusCode > 299 {
-		e = errors.New("doDockerAPI URL: " + URL + " status code: " + strconv.Itoa(r.StatusCode) +
+		e = errors.New("DockerAPI URL: " + URL + " status code: " + strconv.Itoa(r.StatusCode) +
 			"error: " + string(resp))
 		return
 	}
@@ -190,7 +200,7 @@ func doDockerAPI(tr *http.Transport, operation, apipath string, jsonString []byt
 
 func dockerVersion() (major, minor, revision int, err error) {
 	apipath := "/version"
-	resp, err := doDockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
+	resp, err := DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
 	if err != nil {
 		blog.Error(err, ": Error in Remote Docker API call: ", apipath)
 		return
@@ -244,10 +254,10 @@ func createCmd(imageID ImageIDType, scriptName, staticBinary, dirPath string) (j
 	return json.Marshal(container)
 }
 
-// createContainer makes a docker remote API call to create a container
-func createContainer(containerSpec []byte) (containerID string, err error) {
+// CreateContainer makes a docker remote API call to create a container.
+func CreateContainer(containerSpec []byte) (containerID string, err error) {
 	apipath := "/containers/create"
-	resp, err := doDockerAPI(DockerTransport, "POST", apipath, containerSpec, "")
+	resp, err := DockerAPI(DockerTransport, "POST", apipath, containerSpec, "")
 	if err != nil {
 		blog.Error(err, ": Error in Remote Docker API call: ", apipath, string(containerSpec))
 		return
@@ -267,10 +277,10 @@ func createContainer(containerSpec []byte) (containerID string, err error) {
 	return
 }
 
-// startContainer makes a docker remote API call to create a container
-func startContainer(containerID string) (jsonOut []byte, err error) {
+// StartContainer makes a docker remote API call to start a container.
+func StartContainer(containerID string) (jsonOut []byte, err error) {
 	apipath := "/containers/" + containerID + "/start"
-	resp, err := doDockerAPI(DockerTransport, "POST", apipath, []byte{}, "")
+	resp, err := DockerAPI(DockerTransport, "POST", apipath, []byte{}, "")
 	if err != nil {
 		blog.Error(err, ": Error in Remote Docker API call: ", apipath)
 		return
@@ -279,10 +289,10 @@ func startContainer(containerID string) (jsonOut []byte, err error) {
 	return
 }
 
-// waitContainer makes a docker remote API call to wait for a container to finish running
-func waitContainer(containerID string) (statusCode int, err error) {
+// WaitContainer makes a docker remote API call to wait for a container to finish running.
+func WaitContainer(containerID string) (statusCode int, err error) {
 	apipath := "/containers/" + containerID + "/wait"
-	resp, err := doDockerAPI(DockerTransport, "POST", apipath, []byte{}, "")
+	resp, err := DockerAPI(DockerTransport, "POST", apipath, []byte{}, "")
 	if err != nil {
 		blog.Error(err, ": Error in Remote Docker API call: ", apipath)
 		return
@@ -301,10 +311,10 @@ func waitContainer(containerID string) (statusCode int, err error) {
 	return
 }
 
-// logsContainer makes a docker remote API call to get logs from a container
-func logsContainer(containerID string) (output []byte, err error) {
+// LogsContainer makes a docker remote API call to get logs from a container.
+func LogsContainer(containerID string) (output []byte, err error) {
 	apipath := "/containers/" + containerID + "/logs?stdout=1"
-	resp, err := doDockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
+	resp, err := DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
 	if err != nil {
 		blog.Error(err, ": Error in Remote Docker API call: ", apipath)
 		return
@@ -329,10 +339,10 @@ func logsContainer(containerID string) (output []byte, err error) {
 	return
 }
 
-// removeContainer makes a docker remote API call to remove a container
-func removeContainer(containerID string) (resp []byte, err error) {
+// RemoveContainer makes a docker remote API call to remove a container.
+func RemoveContainer(containerID string) (resp []byte, err error) {
 	apipath := "/containers/" + containerID
-	resp, err = doDockerAPI(DockerTransport, "DELETE", apipath, []byte{}, "")
+	resp, err = DockerAPI(DockerTransport, "DELETE", apipath, []byte{}, "")
 	if err != nil {
 		blog.Error(err)
 		return
@@ -341,11 +351,10 @@ func removeContainer(containerID string) (resp []byte, err error) {
 	return
 }
 
-
 // listImages makes a docker remote API call to get a list of images
 func listImages() (resp []byte, err error) {
 	apipath := "/images/json"
-	resp, err = doDockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
+	resp, err = DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
 	if err != nil {
 		blog.Error(err)
 		return
@@ -356,7 +365,7 @@ func listImages() (resp []byte, err error) {
 
 func inspectImage(imageID string) (resp []byte, err error) {
 	apipath := "/images/" + imageID + "/json"
-	resp, err = doDockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
+	resp, err = DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
 	if err != nil {
 		blog.Error(err)
 		return
@@ -365,3 +374,13 @@ func inspectImage(imageID string) (resp []byte, err error) {
 	return
 }
 
+func InspectContainer(containerID string) (containerSpec ContainerInspection, err error) {
+	apipath := "/containers/" + containerID + "/json"
+	resp, err := DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
+	if err != nil {
+		blog.Error(err)
+		return
+	}
+	err = json.Unmarshal(resp, &containerSpec)
+	return
+}
