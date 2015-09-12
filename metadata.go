@@ -181,13 +181,26 @@ func NewIndexInfoMap() IndexInfoMap {
 // ImageToRepoTagMap maps image ID to all of its aliases (Repository+Tag).
 type ImageToRepoTagMap map[ImageIDType][]RepoTagType
 
-// inserts repotag into the list of RepoTagTypes for imageID in ImageToRepoTagMap
+// Insert appends repotag to the slice of RepoTagTypes for imageID in ImageToRepoTagMap.
 func (imageMap ImageToRepoTagMap) Insert(imageID ImageIDType, repotag RepoTagType) {
 	if _, ok := imageMap[imageID]; ok {
 		imageMap[imageID] = append(imageMap[imageID], repotag)
 	} else {
 		imageMap[imageID] = []RepoTagType{repotag}
 	}
+}
+
+// FilterRepoTag returns a new ImageToRepoTagMap that only has elements that match the given repo:tag.
+func (imageMap ImageToRepoTagMap) FilterRepoTag(repotag RepoTagType) (newImageMap ImageToRepoTagMap) {
+	newImageMap = make(ImageToRepoTagMap)
+	for imageID, RepoTagSlice := range imageMap {
+		for _, rt := range RepoTagSlice {
+			if repotag == rt {
+				newImageMap.Insert(imageID, rt)
+			}
+		}
+	}
+	return
 }
 
 // ByDateTime is used to sort ImageMetadataInfo slices by image age from newest to oldest.
@@ -302,7 +315,7 @@ func GetLocalImageMetadata(oldMetadataSet MetadataSet) (metadataSlice []ImageMet
 
 		blog.Info("Get Image Metadata from local Docker daemon")
 		// Get image metadata
-		metadataSlice, e = getImageMetadata(imageMap, oldMetadataSet)
+		metadataSlice, e = GetImageMetadataSpecified(imageMap, oldMetadataSet)
 		if e != nil {
 			blog.Warn(e, " GetImageMetadata")
 			blog.Warn("Retrying")
@@ -314,7 +327,9 @@ func GetLocalImageMetadata(oldMetadataSet MetadataSet) (metadataSlice []ImageMet
 	return
 }
 
-// GetImageMetadata returns repository/tag/image metadata queried from a Docker registry.
+// GetImageMetadata determines which image metadata is of interest and then calls
+// GetImageMetadataSpecified to obtain and return the appropriate metadata,
+// queried from a Docker registry or Docker daemon.
 // If the user has specified the repositories to examine, then no other repositories are examined.
 // If the user has not specified repositories, then the registry search API is used to
 // get the list of all repositories in the registry.
@@ -366,9 +381,9 @@ func GetImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataS
 
 			blog.Info("Get Image Metadata")
 			// Get image metadata
-			metadataSlice, e = getImageMetadata(imageMap, oldMetadataSet)
+			metadataSlice, e = GetImageMetadataSpecified(imageMap, oldMetadataSet)
 			if e != nil {
-				blog.Warn(e, " getImageMetadata")
+				blog.Warn(e, " GetImageMetadataSpecified")
 				blog.Warn("Retrying")
 				time.Sleep(config.RETRYDURATION)
 				continue
@@ -953,8 +968,9 @@ func v2GetTagsMetadata(repoSlice []RepoType) (tagSlice []TagInfo, metadataSlice 
 	return
 }
 
-// getImageMetadata queries the Docker registry for info about each image.
-func getImageMetadata(imageMap map[ImageIDType][]RepoTagType,
+// GetImageMetadataSpecified queries the Docker registry for info about each image
+// specified in the imageMap argument.
+func GetImageMetadataSpecified(imageMap map[ImageIDType][]RepoTagType,
 	oldMetadataSet MetadataSet) (metadataSlice []ImageMetadataInfo, e error) {
 
 	metadataMap := NewImageToMetadataMap(oldMetadataSet)
@@ -1000,7 +1016,7 @@ func getImageMetadata(imageMap map[ImageIDType][]RepoTagType,
 			var e error
 
 			if LocalHost {
-				response, e = inspectImage(string(imageID))
+				response, e = InspectImage(string(imageID))
 			} else {
 				if *RegistryProto == "quay" {
 					// TODO: Properly support quay.io image metadata instead of faking it.
@@ -1043,7 +1059,7 @@ func getImageMetadata(imageMap map[ImageIDType][]RepoTagType,
 				case metadata := <-ch:
 					metadataSlice = append(metadataSlice, metadata)
 				case err := <-errch:
-					blog.Error(err, ":getImageMetadata")
+					blog.Error(err, ":GetImageMetadataSpecified")
 				}
 			}
 		}
@@ -1053,7 +1069,7 @@ func getImageMetadata(imageMap map[ImageIDType][]RepoTagType,
 		case metadata := <-ch:
 			metadataSlice = append(metadataSlice, metadata)
 		case err := <-errch:
-			blog.Error(err, ":getImageMetadata")
+			blog.Error(err, ":GetImageMetadataSpecified")
 		}
 	}
 

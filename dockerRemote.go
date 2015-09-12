@@ -363,7 +363,7 @@ func listImages() (resp []byte, err error) {
 	return
 }
 
-func inspectImage(imageID string) (resp []byte, err error) {
+func InspectImage(imageID string) (resp []byte, err error) {
 	apipath := "/images/" + imageID + "/json"
 	resp, err = DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
 	if err != nil {
