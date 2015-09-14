@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	config "github.com/banyanops/collector/config"
+	exit "github.com/banyanops/collector/exit"
 	blog "github.com/ccpaging/log4go"
 	flag "github.com/docker/docker/pkg/mflag"
 )
@@ -95,7 +96,7 @@ func getScriptsToRun() (scripts []Script) {
 	// get default scripts
 	defaultScripts, err := getScripts(DefaultScriptsDir)
 	if err != nil {
-		blog.Exit(err, ": Error in getting default scripts")
+		exit.Fail(err, ": Error in getting default scripts")
 	}
 
 	// get user-specified scripts

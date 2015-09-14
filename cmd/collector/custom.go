@@ -8,6 +8,7 @@ import (
 
 	collector "github.com/banyanops/collector"
 	config "github.com/banyanops/collector/config"
+	exit "github.com/banyanops/collector/exit"
 	fsutil "github.com/banyanops/collector/fsutil"
 	blog "github.com/ccpaging/log4go"
 	flag "github.com/docker/docker/pkg/mflag"
@@ -43,22 +44,22 @@ func doFlags() {
 	flag.Parse()
 	if config.COLLECTORDIR() == "" {
 		flag.Usage()
-		os.Exit(1)
+		os.Exit(exit.ErrorExitStatus)
 	}
 	if len(flag.Args()) < 1 {
 		flag.Usage()
-		os.Exit(1)
+		os.Exit(exit.ErrorExitStatus)
 	}
 	if *dockerProto != "unix" && *dockerProto != "tcp" {
 		flag.Usage()
-		os.Exit(1)
+		os.Exit(exit.ErrorExitStatus)
 	}
 	requiredDirs := []string{config.BANYANDIR(), filepath.Dir(*imageList), filepath.Dir(*repoList), *config.BanyanOutDir, collector.DefaultScriptsDir, collector.UserScriptsDir, collector.BinDir}
 	for _, dir := range requiredDirs {
 		blog.Debug("Creating directory: " + dir)
 		err := fsutil.CreateDirIfNotExist(dir)
 		if err != nil {
-			blog.Exit(err, ": Error in creating a required directory: ", dir)
+			exit.Fail(err, ": Error in creating a required directory: ", dir)
 		}
 	}
 	collector.RegistrySpec = flag.Arg(0)

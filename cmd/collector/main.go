@@ -12,6 +12,7 @@ import (
 
 	collector "github.com/banyanops/collector"
 	config "github.com/banyanops/collector/config"
+	exit "github.com/banyanops/collector/exit"
 	fsutil "github.com/banyanops/collector/fsutil"
 	blog "github.com/ccpaging/log4go"
 	flag "github.com/docker/docker/pkg/mflag"
@@ -253,7 +254,7 @@ func setupLogging() {
 	blog.AddFilter("stdout", CONSOLELOGLEVEL, consoleLog)
 	f, e := os.OpenFile(LOGFILENAME, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		blog.Exit(e, ": Error in opening log file: ", LOGFILENAME)
+		exit.Fail(e, ": Error in opening log file: ", LOGFILENAME)
 	}
 	f.Close()
 	flw := blog.NewFileLogWriter(LOGFILENAME, false)
@@ -300,7 +301,7 @@ func main() {
 	var e error
 	collector.DockerTransport, e = collector.NewDockerTransport(*dockerProto, *dockerAddr)
 	if e != nil {
-		blog.Exit(e, ": Error in connecting to docker remote API socket")
+		exit.Fail(e, ": Error in connecting to docker remote API socket")
 	}
 
 	authToken := RegisterCollector()

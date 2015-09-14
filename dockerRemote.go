@@ -16,6 +16,7 @@ import (
 	"time"
 
 	config "github.com/banyanops/collector/config"
+	exit "github.com/banyanops/collector/exit"
 	blog "github.com/ccpaging/log4go"
 )
 
@@ -112,7 +113,7 @@ func NewDockerTransport(proto, addr string) (tr *http.Transport, e error) {
 			DockerProto = "unix"
 			DockerAddr = dockerHost[6:]
 		default:
-			blog.Exit("Unexpected value in $DOCKER_HOST:", dockerHost)
+			exit.Fail("Unexpected value in $DOCKER_HOST:", dockerHost)
 		}
 	}
 
@@ -135,7 +136,7 @@ func NewDockerTransport(proto, addr string) (tr *http.Transport, e error) {
 		keyfile := dockerCertPath + "/key.pem"
 		tr, e = NewTLSTransport(DockerAddr, certfile, cafile, keyfile)
 		if e != nil {
-			blog.Exit(e, "NewTLSTransport")
+			exit.Fail(e, "NewTLSTransport")
 		}
 		return
 	}

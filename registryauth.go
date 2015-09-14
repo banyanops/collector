@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/credentialprovider"
+	exit "github.com/banyanops/collector/exit"
 	gcr "github.com/banyanops/collector/gcr"
 	blog "github.com/ccpaging/log4go"
 	flag "github.com/docker/docker/pkg/mflag"
@@ -66,7 +67,7 @@ func GetRegistryURL() (URL string, hubAPI bool, BasicAuth string, XRegistryAuth 
 	basicAuth, fullRegistry, XRegistryAuth := RegAuth(RegistrySpec)
 	if *AuthRegistry == true {
 		if basicAuth == "" {
-			blog.Exit("Registry auth could not be determined from docker config.")
+			exit.Fail("Registry auth could not be determined from docker config.")
 		}
 		BasicAuth = basicAuth
 	}
@@ -113,10 +114,10 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 	if len(DockerConfig) == 0 {
 		major, minor, revision, err := dockerVersion()
 		if err != nil {
-			blog.Exit("Could not determine Docker version")
+			exit.Fail("Could not determine Docker version")
 		}
 		if major < 1 || (major == 1 && minor <= 2) {
-			blog.Exit("Unsupported docker version %d.%d.%d", major, minor, revision)
+			exit.Fail("Unsupported docker version %d.%d.%d", major, minor, revision)
 		}
 		if major == 1 && minor <= 6 {
 			DockerConfig = os.Getenv("HOME") + "/.dockercfg"
@@ -130,7 +131,7 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 	data, err := ioutil.ReadFile(DockerConfig)
 	if err != nil {
 		if useDotDockerDir == false {
-			blog.Exit("Could not read", DockerConfig)
+			exit.Fail("Could not read", DockerConfig)
 		}
 		// new .docker/config.json didn't work, so try the old .dockercfg
 		blog.Error("Could not read %s, trying $HOME/.dockercfg", DockerConfig)
@@ -138,7 +139,7 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 		useDotDockerDir = false
 		data, err = ioutil.ReadFile(DockerConfig)
 		if err != nil {
-			blog.Exit("Could not read", DockerConfig)
+			exit.Fail("Could not read", DockerConfig)
 		}
 	}
 
@@ -252,7 +253,7 @@ func getAuthConfig(user, password, auth, email, registry string) (authConfig str
 	}
 	jsonString, err := json.Marshal(ac)
 	if err != nil {
-		blog.Exit("Failed to marshal authconfig")
+		exit.Fail("Failed to marshal authconfig")
 	}
 	dst := make([]byte, base64.URLEncoding.EncodedLen(len(jsonString)))
 	base64.URLEncoding.Encode(dst, jsonString)

@@ -8,12 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	exit "github.com/banyanops/collector/exit"
 	blog "github.com/ccpaging/log4go"
-)
-
-const (
-	// EXITERR is the error exit status code.
-	EXITERR = 4
 )
 
 func DirExists(dir string) (bool, error) {
@@ -97,17 +93,13 @@ func CopyDir(srcDir, destDir string) {
 func CopyDirTree(srcDir, destDir string) {
 	srcs, err := filepath.Glob(srcDir)
 	if err != nil {
-		blog.Error(err, ": Error in generating matches for", srcDir)
-		blog.Close()
-		os.Exit(EXITERR)
+		exit.Fail(err, ": Error in generating matches for", srcDir)
 	}
 	args := []string{"-rp"}
 	dirs := append(args, append(srcs, destDir)...)
 	cpCmd := exec.Command("cp", dirs...)
 	err = cpCmd.Run()
 	if err != nil {
-		blog.Error(err, ": Error in copying", srcDir, " to ", destDir)
-		blog.Close()
-		os.Exit(EXITERR)
+		exit.Fail(err, ": Error in copying", srcDir, " to ", destDir)
 	}
 }
