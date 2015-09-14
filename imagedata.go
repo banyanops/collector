@@ -54,6 +54,9 @@ func RemoveImages(PulledImages []ImageMetadataInfo, imageToMDMap map[string][]Im
 			blog.Debug("Removing the following registry/repo:tag: " + RegistrySpec + "/" +
 				metadata.Repo + ":" + metadata.Tag)
 			apipath := "/images/" + RegistrySpec + "/" + metadata.Repo + ":" + metadata.Tag
+			if RegistrySpec == "index.docker.io" {
+				apipath = "/images/" + "/" + metadata.Repo + ":" + metadata.Tag
+			}
 			blog.Info("RemoveImages %s", apipath)
 			config.BanyanUpdate("Remove", apipath)
 			_, err := DockerAPI(DockerTransport, "DELETE", apipath, []byte{}, "")
