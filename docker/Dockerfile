@@ -3,6 +3,7 @@ FROM centurylink/ca-certs
 MAINTAINER yoshio@banyanops.com
 
 ENV COLLECTOR_DIR /banyancollector
+ENV HOME /root
 ENV BANYAN_DIR /banyandir
 ENV PATH $COLLECTOR_DIR:$PATH
 WORKDIR $COLLECTOR_DIR

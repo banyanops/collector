@@ -131,7 +131,7 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 	data, err := ioutil.ReadFile(DockerConfig)
 	if err != nil {
 		if useDotDockerDir == false {
-			exit.Fail("Could not read", DockerConfig)
+			exit.Fail("Could not read %s", DockerConfig)
 		}
 		// new .docker/config.json didn't work, so try the old .dockercfg
 		blog.Error("Could not read %s, trying $HOME/.dockercfg", DockerConfig)
