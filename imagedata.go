@@ -55,7 +55,11 @@ func RemoveImages(PulledImages []ImageMetadataInfo, imageToMDMap map[string][]Im
 				metadata.Repo + ":" + metadata.Tag)
 			apipath := "/images/" + RegistrySpec + "/" + metadata.Repo + ":" + metadata.Tag
 			if RegistrySpec == "index.docker.io" {
-				apipath = "/images/" + "/" + metadata.Repo + ":" + metadata.Tag
+				repoName := metadata.Repo
+				if strings.HasPrefix(metadata.Repo, "library/") {
+					repoName = strings.Replace(repoName, "library/", "", 1)
+				}
+				apipath = "/images/" + repoName + ":" + metadata.Tag
 			}
 			blog.Info("RemoveImages %s", apipath)
 			config.BanyanUpdate("Remove", apipath)
