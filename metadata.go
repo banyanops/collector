@@ -84,6 +84,17 @@ func NewMetadataSet() MetadataSet {
 	return MetadataSet(make(map[ImageMetadataInfo]bool))
 }
 
+// Insert adds a metadata entry to a MetadataSet.
+func (m MetadataSet) Insert(metadata ImageMetadataInfo) {
+	m[metadata] = true
+}
+
+// Exists returns true if the metadata entry is in the MetadataSet.
+func (m MetadataSet) Exists(metadata ImageMetadataInfo) bool {
+	_, ok := m[metadata]
+	return ok
+}
+
 // NewImageToMetadataMap is a constructor for ImageToMetadataMap.
 func NewImageToMetadataMap(s MetadataSet) ImageToMetadataMap {
 	m := make(map[ImageIDType]ImageMetadataInfo)
@@ -862,7 +873,7 @@ func GetNewImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo,
 	// get only the new metadata from currentMetadataSlice
 	currentMetadataSet = NewMetadataSet()
 	for _, metadata := range currentMetadataSlice {
-		currentMetadataSet[metadata] = true
+		currentMetadataSet.Insert(metadata)
 		if _, ok := oldMetadataSet[metadata]; !ok {
 			// metadata is not in old map
 			metadataSlice = append(metadataSlice, metadata)
@@ -873,7 +884,7 @@ func GetNewImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo,
 	// and remove those entries from the database
 	obsolete := []ImageMetadataInfo{}
 	for metadata := range oldMetadataSet {
-		if _, ok := currentMetadataSet[metadata]; !ok {
+		if !currentMetadataSet.Exists(metadata) {
 			if len(ReposToProcess) > 0 {
 				if _, present := ReposToProcess[RepoType(metadata.Repo)]; present {
 					obsolete = append(obsolete, metadata)

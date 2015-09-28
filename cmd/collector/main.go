@@ -80,9 +80,13 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 	// Set of repos to stop limiting according to maxImages after this iteration completes.
 	StopLimiting := NewRepoSet()
 
+	// processed metadata
+	processedMetadata := collector.NewMetadataSet()
+
 	for {
 		pulledImages := collector.NewImageSet()
 		for _, metadata := range metadataSlice {
+			processedMetadata.Insert(metadata)
 			if config.FilterRepos && !collector.ReposToProcess[collector.RepoType(metadata.Repo)] {
 				continue
 			}
@@ -141,6 +145,13 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 			blog.Error(e, "Failed to persist list of collected images")
 		}
 		if checkConfigUpdate(false) == true {
+			// Config changed, and possibly did so before all current metadata was processed.
+			// Thus, remember only the metadata that has already been processed, and forget
+			// metadata that has not been processed yet.
+			// That way, the next time DoIteration() is entered, the metadata lookup
+			// will correctly schedule the forgotten metadata for processing, along with
+			// any new metadata.
+			currentMetadataSet = processedMetadata
 			break
 		}
 	}
@@ -271,14 +282,17 @@ func copyBanyanData() {
 	fsutil.CopyDirTree(config.COLLECTORDIR()+"/data/bin/*", collector.BinDir)
 }
 
-func InfLoop(authToken string, processedImages collector.ImageSet, MetadataSet collector.MetadataSet,
-	PulledList []collector.ImageMetadataInfo) {
+func InfLoop(authToken string, processedImages collector.ImageSet) {
 	duration := time.Duration(*poll) * time.Second
 	reposToLimit := NewRepoSet()
 
+	// Image Metadata we have already seen
+	metadataSet := collector.NewMetadataSet()
+	pulledList := []collector.ImageMetadataInfo{}
+
 	for {
 		config.BanyanUpdate("New iteration")
-		MetadataSet, PulledList = DoIteration(reposToLimit, authToken, processedImages, MetadataSet, PulledList)
+		metadataSet, pulledList = DoIteration(reposToLimit, authToken, processedImages, metadataSet, pulledList)
 
 		blog.Info("Looping in %d seconds", *poll)
 		config.BanyanUpdate("Sleeping for", strconv.FormatInt(*poll, 10), "seconds")
@@ -324,10 +338,6 @@ func main() {
 	}
 	blog.Debug(processedImages)
 
-	// Image Metadata we have already seen
-	MetadataSet := collector.NewMetadataSet()
-	PulledList := []collector.ImageMetadataInfo{}
-
 	// Main infinite loop.
-	InfLoop(authToken, processedImages, MetadataSet, PulledList)
+	InfLoop(authToken, processedImages)
 }
