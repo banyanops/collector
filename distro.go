@@ -5,7 +5,7 @@ package collector
 import (
 	"strings"
 
-	blog "github.com/ccpaging/log4go"
+	except "github.com/banyanops/collector/except"
 )
 
 // DistroMap is a reference that maps each pretty name to the corresponding distribution name.
@@ -75,6 +75,6 @@ func getDistroID(distroName string) string {
 		return "UBUNTU-wily"
 	}
 
-	blog.Warn("DISTRO %s UNKNOWN", distroName)
+	except.Warn("DISTRO %s UNKNOWN", distroName)
 	return "Unknown"
 }

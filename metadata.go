@@ -15,6 +15,7 @@ import (
 	"time"
 
 	config "github.com/banyanops/collector/config"
+	except "github.com/banyanops/collector/except"
 	blog "github.com/ccpaging/log4go"
 )
 
@@ -318,8 +319,8 @@ func GetLocalImageMetadata(oldMetadataSet MetadataSet) (metadataSlice []ImageMet
 		blog.Info("Get a list of images from local Docker daemon")
 		imageMap, e := GetLocalImages()
 		if e != nil {
-			blog.Warn(e, " GetLocalImages")
-			blog.Warn("Retrying")
+			except.Warn(e, " GetLocalImages")
+			except.Warn("Retrying")
 			time.Sleep(config.RETRYDURATION)
 			continue
 		}
@@ -328,8 +329,8 @@ func GetLocalImageMetadata(oldMetadataSet MetadataSet) (metadataSlice []ImageMet
 		// Get image metadata
 		metadataSlice, e = GetImageMetadataSpecified(imageMap, oldMetadataSet)
 		if e != nil {
-			blog.Warn(e, " GetImageMetadata")
-			blog.Warn("Retrying")
+			except.Warn(e, " GetImageMetadata")
+			except.Warn("Retrying")
 			time.Sleep(config.RETRYDURATION)
 			continue
 		}
@@ -349,8 +350,8 @@ func GetImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataS
 		blog.Info("Get Repos")
 		repoSlice, e := getRepos()
 		if e != nil {
-			blog.Warn(e, " getRepos")
-			blog.Warn("Retrying")
+			except.Warn(e, " getRepos")
+			except.Warn("Retrying")
 			time.Sleep(config.RETRYDURATION)
 			continue
 		}
@@ -358,7 +359,7 @@ func GetImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataS
 			// For some reason (like, registry search doesn't work), we are not
 			// seeing any repos in the registry.
 			// So, just reconstruct the list of repos that we saw earlier.
-			blog.Warn("Empty repoSlice, reusing previous metadata")
+			except.Warn("Empty repoSlice, reusing previous metadata")
 			repomap := make(map[string]bool)
 			for metadata := range oldMetadataSet {
 				if repomap[metadata.Repo] == false {
@@ -374,8 +375,8 @@ func GetImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataS
 			blog.Info("Get Tags")
 			tagSlice, e = getTags(repoSlice)
 			if e != nil {
-				blog.Warn(e, " getTags")
-				blog.Warn("Retrying")
+				except.Warn(e, " getTags")
+				except.Warn("Retrying")
 				time.Sleep(config.RETRYDURATION)
 				continue
 			}
@@ -394,8 +395,8 @@ func GetImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataS
 			// Get image metadata
 			metadataSlice, e = GetImageMetadataSpecified(imageMap, oldMetadataSet)
 			if e != nil {
-				blog.Warn(e, " GetImageMetadataSpecified")
-				blog.Warn("Retrying")
+				except.Warn(e, " GetImageMetadataSpecified")
+				except.Warn("Retrying")
 				time.Sleep(config.RETRYDURATION)
 				continue
 			}
@@ -405,8 +406,8 @@ func GetImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataS
 			blog.Info("Get Tags and Metadata")
 			tagSlice, metadataSlice, e = v2GetTagsMetadata(repoSlice)
 			if e != nil {
-				blog.Warn(e)
-				blog.Warn("Retrying")
+				except.Warn(e)
+				except.Warn("Retrying")
 				time.Sleep(config.RETRYDURATION)
 				continue
 			}
@@ -456,7 +457,7 @@ func GetImageMetadataTokenAuthV1(oldMetadataSet MetadataSet) (tagSlice []TagInfo
 		var e error
 		allRepos, e = registrySearchV1(client, searchTerm)
 		if e != nil {
-			blog.Error(e, ":registry search")
+			except.Error(e, ":registry search")
 			return
 		}
 	}
@@ -482,7 +483,7 @@ func GetImageMetadataTokenAuthV1(oldMetadataSet MetadataSet) (tagSlice []TagInfo
 		for {
 			indexInfo, e = getReposTokenAuthV1(repo, client)
 			if e != nil {
-				blog.Warn(e, ":index lookup failed for repo", string(repo), "- retrying.")
+				except.Warn(e, ":index lookup failed for repo", string(repo), "- retrying.")
 				config.BanyanUpdate(e.Error(), ":index lookup failed, repo", string(repo), "- retrying")
 				time.Sleep(config.RETRYDURATION)
 				continue
@@ -490,13 +491,13 @@ func GetImageMetadataTokenAuthV1(oldMetadataSet MetadataSet) (tagSlice []TagInfo
 
 			repoTagSlice, e = getTagsTokenAuthV1(repo, client, indexInfo)
 			if e != nil {
-				blog.Warn(e, ":tag lookup failed for repo", string(repo), "- retrying.")
+				except.Warn(e, ":tag lookup failed for repo", string(repo), "- retrying.")
 				config.BanyanUpdate(e.Error(), ":tag lookup failed for repo", string(repo), "- retrying")
 				time.Sleep(config.RETRYDURATION)
 				continue
 			}
 			if len(repoTagSlice) != 1 {
-				blog.Error("Incorrect length of repoTagSlice: expected length=1, got length=%d", len(repoTagSlice))
+				except.Error("Incorrect length of repoTagSlice: expected length=1, got length=%d", len(repoTagSlice))
 				config.BanyanUpdate("Incorrect length of repoTagSlice:", strconv.Itoa(len(repoTagSlice)), string(repo))
 				time.Sleep(config.RETRYDURATION)
 				continue
@@ -504,7 +505,7 @@ func GetImageMetadataTokenAuthV1(oldMetadataSet MetadataSet) (tagSlice []TagInfo
 
 			repoMetadataSlice, e = getMetadataTokenAuthV1(repoTagSlice[0], metadataMap, client, indexInfo)
 			if e != nil {
-				blog.Warn(e, ":metadata lookup failed for", string(repoTagSlice[0].Repo), "- retrying.")
+				except.Warn(e, ":metadata lookup failed for", string(repoTagSlice[0].Repo), "- retrying.")
 				config.BanyanUpdate(e.Error(), ":metadata lookup failed for", string(repoTagSlice[0].Repo), "- retrying")
 				time.Sleep(config.RETRYDURATION)
 				continue
@@ -522,9 +523,9 @@ func GetImageMetadataTokenAuthV1(oldMetadataSet MetadataSet) (tagSlice []TagInfo
 func registrySearchV1(client *http.Client, searchTerm string) (repoSlice []RepoType, err error) {
 	response, err := RegistryQuery(client, RegistryAPIURL+"/v1/search?q="+searchTerm)
 	if err != nil {
-		blog.Error(err)
+		except.Error(err)
 		if s, ok := err.(*HTTPStatusCodeError); ok {
-			blog.Error("HTTP bad status code %d from registry %s using --registryhttps=%v --registryauth=%v --registryproto=%s", s.StatusCode, RegistryAPIURL, *HTTPSRegistry, *AuthRegistry, *RegistryProto)
+			except.Error("HTTP bad status code %d from registry %s using --registryhttps=%v --registryauth=%v --registryproto=%s", s.StatusCode, RegistryAPIURL, *HTTPSRegistry, *AuthRegistry, *RegistryProto)
 		}
 		return
 	}
@@ -532,7 +533,7 @@ func registrySearchV1(client *http.Client, searchTerm string) (repoSlice []RepoT
 	// parse the JSON response body and populate repo slice
 	var result registrySearchResult
 	if err = json.Unmarshal(response, &result); err != nil {
-		blog.Error(err, "unmarshal", string(response))
+		except.Error(err, "unmarshal", string(response))
 		return
 	}
 	for _, elem := range result.Results {
@@ -556,7 +557,7 @@ func getRepos() (repoSlice []RepoType, err error) {
 	}
 
 	if *RegistryProto == "v2" {
-		blog.Error("v2 registry search/catalog interface not yet supported in collector")
+		except.Error("v2 registry search/catalog interface not yet supported in collector")
 		return
 	}
 
@@ -585,7 +586,7 @@ func getReposTokenAuthV1(repo RepoType, client *http.Client) (indexInfo IndexInf
 	}
 	r, e := client.Do(req)
 	if e != nil {
-		blog.Error(e, ":getReposTokenAuthV1 HTTP request failed")
+		except.Error(e, ":getReposTokenAuthV1 HTTP request failed")
 		return
 	}
 	defer r.Body.Close()
@@ -624,9 +625,9 @@ func v1GetTags(repoSlice []RepoType) (tagSlice []TagInfo, e error) {
 		// get tags for one repo
 		response, err := RegistryQuery(client, RegistryAPIURL+"/v1/repositories/"+string(repo)+"/tags")
 		if err != nil {
-			blog.Error(err)
+			except.Error(err)
 			if s, ok := err.(*HTTPStatusCodeError); ok {
-				blog.Error("Skipping Repo: %s, tag lookup status code %d", string(repo), s.StatusCode)
+				except.Error("Skipping Repo: %s, tag lookup status code %d", string(repo), s.StatusCode)
 				continue
 			}
 			return
@@ -659,9 +660,9 @@ type V2Manifest struct {
 func v2GetMetadata(client *http.Client, repo, tag string) (metadata ImageMetadataInfo, e error) {
 	response, err := RegistryQuery(client, RegistryAPIURL+"/v2/"+repo+"/manifests/"+tag)
 	if err != nil {
-		blog.Error(err)
+		except.Error(err)
 		if s, ok := err.(*HTTPStatusCodeError); ok {
-			blog.Error("Skipping Repo: %s, tag lookup status code %d", string(repo), s.StatusCode)
+			except.Error("Skipping Repo: %s, tag lookup status code %d", string(repo), s.StatusCode)
 			e = err
 		}
 		return
@@ -704,7 +705,7 @@ func getTags(repoSlice []RepoType) (tagSlice []TagInfo, e error) {
 	case "v2":
 		panic("Unreachable")
 	default:
-		blog.Error("Unknown registry protocol %s", *RegistryProto)
+		except.Error("Unknown registry protocol %s", *RegistryProto)
 		return
 	}
 	panic("Unreachable")
@@ -713,7 +714,7 @@ func getTags(repoSlice []RepoType) (tagSlice []TagInfo, e error) {
 func getTagsTokenAuthV1(repo RepoType, client *http.Client, indexInfo IndexInfo) (tagSlice []TagInfo, e error) {
 	tagSlice, e = lookupTagsTokenAuthV1(client, indexInfo)
 	if e != nil {
-		blog.Error(e, ": Error in looking up tags in dockerhub")
+		except.Error(e, ": Error in looking up tags in dockerhub")
 	}
 	return
 }
@@ -733,12 +734,12 @@ func getMetadataTokenAuthV1(repotag TagInfo, metadataMap ImageToMetadataMap, cli
 		metadata, e = lookupMetadataTokenAuthV1(imageID, client, indexInfo)
 		if e != nil {
 			if s, ok := e.(*HTTPStatusCodeError); ok {
-				blog.Error("Registry returned HTTP status code %d, skipping %s:%s image %s",
+				except.Error("Registry returned HTTP status code %d, skipping %s:%s image %s",
 					s.StatusCode, string(repo), string(tag), string(imageID))
 				continue
 			}
 			// some other error (network broken?), so give up
-			blog.Error(e, "Unable to lookup metadata for",
+			except.Error(e, "Unable to lookup metadata for",
 				repo, ":", tag, string(imageID))
 			return
 		}
@@ -768,14 +769,14 @@ func RegistryRequestWithToken(client *http.Client, URL string, dockerToken strin
 	var req *http.Request
 	req, e = http.NewRequest("GET", URL, nil)
 	if e != nil {
-		blog.Error(e)
+		except.Error(e)
 		return
 	}
 	req.Header.Set("Authorization", "Token "+dockerToken)
 	var r *http.Response
 	r, e = client.Do(req)
 	if e != nil {
-		blog.Error(e)
+		except.Error(e)
 		return
 	}
 	defer r.Body.Close()
@@ -785,7 +786,7 @@ func RegistryRequestWithToken(client *http.Client, URL string, dockerToken strin
 	}
 	response, e = ioutil.ReadAll(r.Body)
 	if e != nil {
-		blog.Error(e)
+		except.Error(e)
 		return
 	}
 	return
@@ -797,7 +798,7 @@ func lookupTagsTokenAuthV1(client *http.Client, info IndexInfo) (tagSlice []TagI
 	URL := "https://" + info.RegistryURL + "/v1/repositories/" + string(info.Repo) + "/tags"
 	response, e := RegistryRequestWithToken(client, URL, info.DockerToken)
 	if e != nil {
-		blog.Error(e)
+		except.Error(e)
 		if s, ok := e.(*HTTPStatusCodeError); ok {
 			e = errors.New("Skipping Repo: " + string(info.Repo) + "tag lookup status code:" +
 				strconv.Itoa(s.StatusCode))
@@ -825,7 +826,7 @@ func lookupMetadataTokenAuthV1(imageID ImageIDType, client *http.Client, indexIn
 	URL := "https://" + indexInfo.RegistryURL + "/v1/images/" + string(imageID) + "/json"
 	response, e := RegistryRequestWithToken(client, URL, indexInfo.DockerToken)
 	if e != nil {
-		blog.Error(e, "Unable to query metadata for image: "+string(imageID))
+		except.Error(e, "Unable to query metadata for image: "+string(imageID))
 		return
 	}
 	// log.Print("metadata query response: " + string(response))
@@ -925,7 +926,7 @@ func statusMessageMD(metadataSlice []ImageMetadataInfo) string {
 // RemoveObsoleteMetadata removes obsolete metadata from the Banyan service.
 func RemoveObsoleteMetadata(obsolete []ImageMetadataInfo) {
 	if len(obsolete) == 0 {
-		blog.Warn("No image metadata to save!")
+		except.Warn("No image metadata to save!")
 		return
 	}
 
@@ -952,9 +953,9 @@ func v2GetTagsMetadata(repoSlice []RepoType) (tagSlice []TagInfo, metadataSlice 
 		// get tags for one repo
 		response, err := RegistryQuery(client, RegistryAPIURL+"/v2/"+string(repo)+"/tags/list")
 		if err != nil {
-			blog.Error(err)
+			except.Error(err)
 			if s, ok := err.(*HTTPStatusCodeError); ok {
-				blog.Error("Skipping Repo: %s, tag lookup status code %d", string(repo), s.StatusCode)
+				except.Error("Skipping Repo: %s, tag lookup status code %d", string(repo), s.StatusCode)
 				continue
 			}
 			return
@@ -968,7 +969,7 @@ func v2GetTagsMetadata(repoSlice []RepoType) (tagSlice []TagInfo, metadataSlice 
 		for _, tag := range m.Tags {
 			metadata, e := v2GetMetadata(client, string(repo), tag)
 			if e != nil {
-				blog.Error(e, ":Unable to get metadata for repo", string(repo), "tag", tag)
+				except.Error(e, ":Unable to get metadata for repo", string(repo), "tag", tag)
 				continue
 			}
 			t.TagMap[TagType(tag)] = ImageIDType(metadata.Image)
@@ -1011,7 +1012,7 @@ func GetImageMetadataSpecified(imageMap map[ImageIDType][]RepoTagType,
 			var e error
 			curr, e = metadataMap.Metadata(imageID)
 			if e != nil {
-				blog.Error(e, "imageID", string(imageID), "not in metadataMap")
+				except.Error(e, "imageID", string(imageID), "not in metadataMap")
 				continue
 			}
 			metadataSlice = append(metadataSlice, curr)
@@ -1070,7 +1071,7 @@ func GetImageMetadataSpecified(imageMap map[ImageIDType][]RepoTagType,
 				case metadata := <-ch:
 					metadataSlice = append(metadataSlice, metadata)
 				case err := <-errch:
-					blog.Error(err, ":GetImageMetadataSpecified")
+					except.Error(err, ":GetImageMetadataSpecified")
 				}
 			}
 		}
@@ -1080,7 +1081,7 @@ func GetImageMetadataSpecified(imageMap map[ImageIDType][]RepoTagType,
 		case metadata := <-ch:
 			metadataSlice = append(metadataSlice, metadata)
 		case err := <-errch:
-			blog.Error(err, ":GetImageMetadataSpecified")
+			except.Error(err, ":GetImageMetadataSpecified")
 		}
 	}
 
@@ -1104,7 +1105,7 @@ func GetImageMetadataSpecified(imageMap map[ImageIDType][]RepoTagType,
 // (standard output, Banyan service, etc.).
 func SaveImageMetadata(metadataSlice []ImageMetadataInfo) {
 	if len(metadataSlice) == 0 {
-		blog.Warn("No image metadata to save!")
+		except.Warn("No image metadata to save!")
 		return
 	}
 
@@ -1124,7 +1125,7 @@ func ValidRepoName(name string) bool {
 		return false
 	}
 	if len(name) > 256 {
-		blog.Error("Invalid repo name, too long: %s", name)
+		except.Error("Invalid repo name, too long: %s", name)
 		return false
 	}
 	for i, c := range name {
@@ -1140,7 +1141,7 @@ func ValidRepoName(name string) bool {
 		case c == '*' && i == len(name)-1:
 			continue
 		default:
-			blog.Error("Invalid repo name %s", name)
+			except.Error("Invalid repo name %s", name)
 			return false
 		}
 	}

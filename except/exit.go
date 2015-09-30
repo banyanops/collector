@@ -1,5 +1,5 @@
-// Package exit defines functions that log a message, and then quit program execution with an exit status.
-package exit
+// Package except defines functions that log a warning or error message, and for fatal errors will quit program execution with an exit status.
+package except
 
 import (
 	"os"

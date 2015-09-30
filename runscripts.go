@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	config "github.com/banyanops/collector/config"
-	exit "github.com/banyanops/collector/exit"
+	except "github.com/banyanops/collector/except"
 	blog "github.com/ccpaging/log4go"
 	flag "github.com/docker/docker/pkg/mflag"
 )
@@ -35,7 +35,7 @@ func parsePkgExtractOutput(output []byte, imageID ImageIDType) (imageDataInfo []
 
 	err = yaml.Unmarshal(output, &outInfo)
 	if err != nil {
-		blog.Error(err, ": Error in unmrashaling yaml")
+		except.Error(err, ": Error in unmrashaling yaml")
 		return
 	}
 
@@ -67,7 +67,7 @@ func parsePkgExtractOutput(output []byte, imageID ImageIDType) (imageDataInfo []
 func getScripts(dirPath string) (scripts []Script, err error) {
 	files, err := ioutil.ReadDir(dirPath)
 	if err != nil {
-		blog.Warn(err, ": Error in reading contents of ", dirPath)
+		except.Warn(err, ": Error in reading contents of ", dirPath)
 		return
 	}
 
@@ -82,7 +82,7 @@ func getScripts(dirPath string) (scripts []Script, err error) {
 		case strings.HasSuffix(file.Name(), ".py"):
 			script = newPythonScript(file.Name(), TARGETCONTAINERDIR+strings.TrimPrefix(dirPath, config.BANYANDIR()+"/hosttarget"), []string{""})
 		default:
-			blog.Warn("Unknown script file type for: " + file.Name())
+			except.Warn("Unknown script file type for: " + file.Name())
 			//Ignore this file...
 			continue
 		}
@@ -96,13 +96,13 @@ func getScriptsToRun() (scripts []Script) {
 	// get default scripts
 	defaultScripts, err := getScripts(DefaultScriptsDir)
 	if err != nil {
-		exit.Fail(err, ": Error in getting default scripts")
+		except.Fail(err, ": Error in getting default scripts")
 	}
 
 	// get user-specified scripts
 	userScripts, err := getScripts(UserScriptsDir)
 	if err != nil {
-		blog.Warn(err, ": Error in getting user-specified scripts")
+		except.Warn(err, ": Error in getting user-specified scripts")
 	}
 
 	scripts = append(defaultScripts, userScripts...)
@@ -117,7 +117,7 @@ func runAllScripts(imageID ImageIDType) (outMap map[string]interface{}, err erro
 		//run script
 		output, err := script.Run(imageID)
 		if err != nil {
-			blog.Error(err, ": Error in running script: ", script.Name())
+			except.Error(err, ": Error in running script: ", script.Name())
 			continue //continue trying to run other scripts
 		}
 
@@ -126,7 +126,7 @@ func runAllScripts(imageID ImageIDType) (outMap map[string]interface{}, err erro
 		case PKGEXTRACTSCRIPT:
 			imageDataInfo, err := parsePkgExtractOutput(output, imageID)
 			if err != nil {
-				blog.Error(err, ": Error in parsing PkgExtractOuput")
+				except.Error(err, ": Error in parsing PkgExtractOuput")
 				return nil, err
 			}
 			outMap[script.Name()] = imageDataInfo

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	except "github.com/banyanops/collector/except"
 	fsutil "github.com/banyanops/collector/fsutil"
 	blog "github.com/ccpaging/log4go"
 )
@@ -40,12 +41,12 @@ func (f *FileWriter) WriteImageAllData(outMapMap map[string]map[string]interface
 			scriptDir := f.dir + "/" + trimExtension(scriptName)
 			err := fsutil.CreateDirIfNotExist(scriptDir)
 			if err != nil {
-				blog.Error(err, ": Error creating script dir: ", scriptDir)
+				except.Error(err, ": Error creating script dir: ", scriptDir)
 				continue
 			}
 			image := string(imageID)
 			if len(image) < 12 {
-				blog.Warn("Weird...Haven't seen imageIDs so small -- possibly a test?")
+				except.Warn("Weird...Haven't seen imageIDs so small -- possibly a test?")
 			} else {
 				image = string(imageID)[0:12]
 			}
@@ -82,7 +83,7 @@ func (f *FileWriter) RemoveImageMetadata(imageMetadata []ImageMetadataInfo) {
 
 func (f *FileWriter) handleImageMetadata(imageMetadata []ImageMetadataInfo, action string) {
 	if len(imageMetadata) == 0 {
-		blog.Warn("No image metadata to append to file...")
+		except.Warn("No image metadata to append to file...")
 		return
 	}
 
@@ -97,13 +98,13 @@ func (f *FileWriter) handleImageMetadata(imageMetadata []ImageMetadataInfo, acti
 func jsonifyAndWriteToFile(filenamePath string, data interface{}) (err error) {
 	b, err := json.MarshalIndent(data, "", "\t")
 	if err != nil {
-		blog.Error(err, ": Error in marshaling json")
+		except.Error(err, ": Error in marshaling json")
 		return err
 	}
 
 	err = ioutil.WriteFile(filenamePath, b, 0644)
 	if err != nil {
-		blog.Error(err, ": Error in writing to file: ", filenamePath)
+		except.Error(err, ": Error in writing to file: ", filenamePath)
 		return err
 	}
 
@@ -116,7 +117,7 @@ func (f *FileWriter) writeFileInFormat(filenamePath string, data interface{}) {
 	case "json":
 		err := jsonifyAndWriteToFile(filenamePath+".json", data)
 		if err != nil {
-			blog.Error(err, ": Error in writing json output into file: ", filenamePath+".json")
+			except.Error(err, ": Error in writing json output into file: ", filenamePath+".json")
 			return
 		}
 	case "txt":
@@ -124,11 +125,11 @@ func (f *FileWriter) writeFileInFormat(filenamePath string, data interface{}) {
 		// typecast that to []byte
 		err := ioutil.WriteFile(filenamePath+".txt", (*(data.(*interface{}))).([]byte), 0644)
 		if err != nil {
-			blog.Error(err, ": Error in writing to file: ", filenamePath)
+			except.Error(err, ": Error in writing to file: ", filenamePath)
 			return
 		}
 	default:
-		blog.Warn("Currently only supporting json output to write to files")
+		except.Warn("Currently only supporting json output to write to files")
 	}
 }
 
@@ -141,20 +142,20 @@ func trimExtension(nameExt string) (name string) {
 func jsonifyAndAppendToFile(filenamePath string, data ImageMetadataAndAction) (err error) {
 	b, err := json.MarshalIndent(data, "", "\t")
 	if err != nil {
-		blog.Error(err, ": Error in marshaling json")
+		except.Error(err, ": Error in marshaling json")
 		return err
 	}
 
 	fd, err := os.OpenFile(filenamePath, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
-		blog.Error(err, ": Error in opening file: ", filenamePath)
+		except.Error(err, ": Error in opening file: ", filenamePath)
 		return err
 	}
 	defer fd.Close()
 
 	_, err = fd.Write(b)
 	if err != nil {
-		blog.Error(err, ": Error in writing to file: ", filenamePath)
+		except.Error(err, ": Error in writing to file: ", filenamePath)
 		return err
 	}
 
@@ -166,10 +167,10 @@ func (f *FileWriter) appendFileInFormat(filenamePath string, data ImageMetadataA
 	case "json":
 		err := jsonifyAndAppendToFile(filenamePath+".json", data)
 		if err != nil {
-			blog.Error(err, ": Error in writing json output into file: ", filenamePath+".json")
+			except.Error(err, ": Error in writing json output into file: ", filenamePath+".json")
 			return
 		}
 	default:
-		blog.Warn("Currently only supporting json output to write to files")
+		except.Warn("Currently only supporting json output to write to files")
 	}
 }

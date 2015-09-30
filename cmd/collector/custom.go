@@ -8,7 +8,7 @@ import (
 
 	collector "github.com/banyanops/collector"
 	config "github.com/banyanops/collector/config"
-	exit "github.com/banyanops/collector/exit"
+	except "github.com/banyanops/collector/except"
 	fsutil "github.com/banyanops/collector/fsutil"
 	blog "github.com/ccpaging/log4go"
 	flag "github.com/docker/docker/pkg/mflag"
@@ -44,22 +44,22 @@ func doFlags() {
 	flag.Parse()
 	if config.COLLECTORDIR() == "" {
 		flag.Usage()
-		os.Exit(exit.ErrorExitStatus)
+		os.Exit(except.ErrorExitStatus)
 	}
 	if len(flag.Args()) < 1 {
 		flag.Usage()
-		os.Exit(exit.ErrorExitStatus)
+		os.Exit(except.ErrorExitStatus)
 	}
 	if *dockerProto != "unix" && *dockerProto != "tcp" {
 		flag.Usage()
-		os.Exit(exit.ErrorExitStatus)
+		os.Exit(except.ErrorExitStatus)
 	}
 	requiredDirs := []string{config.BANYANDIR(), filepath.Dir(*imageList), filepath.Dir(*repoList), *config.BanyanOutDir, collector.DefaultScriptsDir, collector.UserScriptsDir, collector.BinDir}
 	for _, dir := range requiredDirs {
 		blog.Debug("Creating directory: " + dir)
 		err := fsutil.CreateDirIfNotExist(dir)
 		if err != nil {
-			exit.Fail(err, ": Error in creating a required directory: ", dir)
+			except.Fail(err, ": Error in creating a required directory: ", dir)
 		}
 	}
 	collector.RegistrySpec = flag.Arg(0)
@@ -93,7 +93,7 @@ func SetOutputWriters(authToken string) {
 		case "file":
 			writer = collector.NewFileWriter("json", *config.BanyanOutDir)
 		default:
-			blog.Error("No such output writer!")
+			except.Error("No such output writer!")
 			//ignore the rest and keep going
 			continue
 		}

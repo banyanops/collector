@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/credentialprovider"
-	exit "github.com/banyanops/collector/exit"
+	except "github.com/banyanops/collector/except"
 	"github.com/golang/glog"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -96,7 +96,7 @@ func JWTInit(jsonKeyPath string) {
 func JWT() credentialprovider.DockerConfig {
 	enabled := jprovider.Enabled()
 	if !enabled {
-		exit.Fail("Failed to enable JWT credential provider")
+		except.Fail("Failed to enable JWT credential provider")
 	}
 	DockerConfig := jprovider.Provide()
 	/*
@@ -128,7 +128,7 @@ func MetadataInit() {
 func Metadata() credentialprovider.DockerConfig {
 	enabled := mprovider.Enabled()
 	if !enabled {
-		exit.Fail("Failed to enable GCE metadata provider")
+		except.Fail("Failed to enable GCE metadata provider")
 	}
 	DockerConfig := mprovider.Provide()
 	/*

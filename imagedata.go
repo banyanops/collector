@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	config "github.com/banyanops/collector/config"
+	except "github.com/banyanops/collector/except"
 	blog "github.com/ccpaging/log4go"
 )
 
@@ -32,10 +33,10 @@ func PullImage(metadata ImageMetadataInfo) {
 	config.BanyanUpdate("Pull", apipath, metadata.Image)
 	resp, err := DockerAPI(DockerTransport, "POST", apipath, []byte{}, XRegistryAuth)
 	if err != nil {
-		blog.Error(err, "PullImage failed for", RegistrySpec, metadata.Repo, metadata.Tag, metadata.Image)
+		except.Error(err, "PullImage failed for", RegistrySpec, metadata.Repo, metadata.Tag, metadata.Image)
 	}
 	if strings.Contains(string(resp), `"error":`) {
-		blog.Error("PullImage error for %s/%s/%s", RegistrySpec, metadata.Repo, metadata.Tag)
+		except.Error("PullImage error for %s/%s/%s", RegistrySpec, metadata.Repo, metadata.Tag)
 	}
 	blog.Trace(string(resp))
 	return
@@ -65,7 +66,7 @@ func RemoveImages(PulledImages []ImageMetadataInfo, imageToMDMap map[string][]Im
 			config.BanyanUpdate("Remove", apipath)
 			_, err := DockerAPI(DockerTransport, "DELETE", apipath, []byte{}, "")
 			if err != nil {
-				blog.Error(err, "RemoveImages Repo:Tag", metadata.Repo, metadata.Tag,
+				except.Error(err, "RemoveImages Repo:Tag", metadata.Repo, metadata.Tag,
 					"image", metadata.Image)
 			}
 			numRemoved++
@@ -119,7 +120,7 @@ func GetImageAllData(pulledImages ImageSet) (outMapMap map[string]map[string]int
 		config.BanyanUpdate("Scripts", string(imageID))
 		outMap, err := runAllScripts(imageID)
 		if err != nil {
-			blog.Error(err, ": Error processing image", string(imageID))
+			except.Error(err, ": Error processing image", string(imageID))
 			continue
 		}
 		outMapMap[string(imageID)] = outMap

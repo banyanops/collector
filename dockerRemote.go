@@ -16,7 +16,7 @@ import (
 	"time"
 
 	config "github.com/banyanops/collector/config"
-	exit "github.com/banyanops/collector/exit"
+	except "github.com/banyanops/collector/except"
 	blog "github.com/ccpaging/log4go"
 )
 
@@ -113,7 +113,7 @@ func NewDockerTransport(proto, addr string) (tr *http.Transport, e error) {
 			DockerProto = "unix"
 			DockerAddr = dockerHost[6:]
 		default:
-			exit.Fail("Unexpected value in $DOCKER_HOST:", dockerHost)
+			except.Fail("Unexpected value in $DOCKER_HOST:", dockerHost)
 		}
 	}
 
@@ -136,7 +136,7 @@ func NewDockerTransport(proto, addr string) (tr *http.Transport, e error) {
 		keyfile := dockerCertPath + "/key.pem"
 		tr, e = NewTLSTransport(DockerAddr, certfile, cafile, keyfile)
 		if e != nil {
-			exit.Fail(e, "NewTLSTransport")
+			except.Fail(e, "NewTLSTransport")
 		}
 		return
 	}
@@ -170,7 +170,7 @@ func DockerAPI(tr *http.Transport, operation, apipath string, jsonString []byte,
 	blog.Debug("DockerAPI %s", URL)
 	req, e := http.NewRequest(operation, URL, bytes.NewBuffer(jsonString))
 	if e != nil {
-		blog.Error(e, ":DockerAPI failed to create http request")
+		except.Error(e, ":DockerAPI failed to create http request")
 		return
 	}
 	req.Header.Add("Content-Type", "application/json")
@@ -182,13 +182,13 @@ func DockerAPI(tr *http.Transport, operation, apipath string, jsonString []byte,
 	client := &http.Client{Transport: tr}
 	r, e := client.Do(req)
 	if e != nil {
-		blog.Error(e, ":DockerAPI URL", URL, "client request failed")
+		except.Error(e, ":DockerAPI URL", URL, "client request failed")
 		return
 	}
 	defer r.Body.Close()
 	resp, e = ioutil.ReadAll(r.Body)
 	if e != nil {
-		blog.Error(e, ":DockerAPI URL", URL, "invalid response body")
+		except.Error(e, ":DockerAPI URL", URL, "invalid response body")
 		return
 	}
 	if r.StatusCode < 200 || r.StatusCode > 299 {
@@ -199,11 +199,11 @@ func DockerAPI(tr *http.Transport, operation, apipath string, jsonString []byte,
 	return
 }
 
-func dockerVersion() (major, minor, revision int, err error) {
+func DockerVersion() (major, minor, revision int, err error) {
 	apipath := "/version"
 	resp, err := DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
 	if err != nil {
-		blog.Error(err, ": Error in Remote Docker API call: ", apipath)
+		except.Error(err, ": Error in Remote Docker API call: ", apipath)
 		return
 	}
 	var msg struct {
@@ -211,7 +211,7 @@ func dockerVersion() (major, minor, revision int, err error) {
 	}
 	err = json.Unmarshal(resp, &msg)
 	if err != nil {
-		blog.Error(err, "unmarshal", string(resp))
+		except.Error(err, "unmarshal", string(resp))
 		return
 	}
 	version := msg.Version
@@ -219,21 +219,21 @@ func dockerVersion() (major, minor, revision int, err error) {
 	if len(arr) >= 1 {
 		major, err = strconv.Atoi(arr[0])
 		if err != nil {
-			blog.Error(err)
+			except.Error(err)
 			return
 		}
 	}
 	if len(arr) >= 2 {
 		minor, err = strconv.Atoi(arr[1])
 		if err != nil {
-			blog.Error(err)
+			except.Error(err)
 			return
 		}
 	}
 	if len(arr) >= 3 {
 		revision, err = strconv.Atoi(arr[2])
 		if err != nil {
-			blog.Error(err)
+			except.Error(err)
 			return
 		}
 	}
@@ -260,7 +260,7 @@ func CreateContainer(containerSpec []byte) (containerID string, err error) {
 	apipath := "/containers/create"
 	resp, err := DockerAPI(DockerTransport, "POST", apipath, containerSpec, "")
 	if err != nil {
-		blog.Error(err, ": Error in Remote Docker API call: ", apipath, string(containerSpec))
+		except.Error(err, ": Error in Remote Docker API call: ", apipath, string(containerSpec))
 		return
 	}
 	blog.Debug("Response from docker remote API call for create: " + string(resp))
@@ -270,7 +270,7 @@ func CreateContainer(containerSpec []byte) (containerID string, err error) {
 	}
 	err = json.Unmarshal(resp, &msg)
 	if err != nil {
-		blog.Error(err, "createContainer resp", string(resp))
+		except.Error(err, "createContainer resp", string(resp))
 		return
 	}
 	blog.Info("Got ID %s Warnings %s\n", msg.Id, msg.Warnings)
@@ -283,7 +283,7 @@ func StartContainer(containerID string) (jsonOut []byte, err error) {
 	apipath := "/containers/" + containerID + "/start"
 	resp, err := DockerAPI(DockerTransport, "POST", apipath, []byte{}, "")
 	if err != nil {
-		blog.Error(err, ": Error in Remote Docker API call: ", apipath)
+		except.Error(err, ": Error in Remote Docker API call: ", apipath)
 		return
 	}
 	blog.Debug("Response from docker remote API call for start: " + string(resp))
@@ -295,7 +295,7 @@ func WaitContainer(containerID string) (statusCode int, err error) {
 	apipath := "/containers/" + containerID + "/wait"
 	resp, err := DockerAPI(DockerTransport, "POST", apipath, []byte{}, "")
 	if err != nil {
-		blog.Error(err, ": Error in Remote Docker API call: ", apipath)
+		except.Error(err, ": Error in Remote Docker API call: ", apipath)
 		return
 	}
 	blog.Debug("Response from docker remote API call for wait: " + string(resp))
@@ -304,7 +304,7 @@ func WaitContainer(containerID string) (statusCode int, err error) {
 	}
 	err = json.Unmarshal(resp, &msg)
 	if err != nil {
-		blog.Error(err, "waitContainer resp", string(resp))
+		except.Error(err, "waitContainer resp", string(resp))
 		return
 	}
 	blog.Info("Got StatusCode %d\n", msg.StatusCode)
@@ -317,7 +317,7 @@ func LogsContainer(containerID string) (output []byte, err error) {
 	apipath := "/containers/" + containerID + "/logs?stdout=1"
 	resp, err := DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
 	if err != nil {
-		blog.Error(err, ": Error in Remote Docker API call: ", apipath)
+		except.Error(err, ": Error in Remote Docker API call: ", apipath)
 		return
 	}
 	blog.Debug("Response from docker remote API call for logs: " + string(resp))
@@ -345,7 +345,7 @@ func RemoveContainer(containerID string) (resp []byte, err error) {
 	apipath := "/containers/" + containerID
 	resp, err = DockerAPI(DockerTransport, "DELETE", apipath, []byte{}, "")
 	if err != nil {
-		blog.Error(err)
+		except.Error(err)
 		return
 	}
 	blog.Debug("Response from docker remote API call for remove: " + string(resp))
@@ -357,7 +357,7 @@ func listImages() (resp []byte, err error) {
 	apipath := "/images/json"
 	resp, err = DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
 	if err != nil {
-		blog.Error(err)
+		except.Error(err)
 		return
 	}
 	blog.Debug("Response from docker remote API call for list images: " + string(resp))
@@ -368,7 +368,7 @@ func InspectImage(imageID string) (resp []byte, err error) {
 	apipath := "/images/" + imageID + "/json"
 	resp, err = DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
 	if err != nil {
-		blog.Error(err)
+		except.Error(err)
 		return
 	}
 	blog.Debug("Response from docker remote API call for inspect image " + imageID + " : \n" + string(resp))
@@ -379,7 +379,7 @@ func InspectContainer(containerID string) (containerSpec ContainerInspection, er
 	apipath := "/containers/" + containerID + "/json"
 	resp, err := DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
 	if err != nil {
-		blog.Error(err)
+		except.Error(err)
 		return
 	}
 	err = json.Unmarshal(resp, &containerSpec)

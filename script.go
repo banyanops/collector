@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strconv"
 
+	except "github.com/banyanops/collector/except"
 	blog "github.com/ccpaging/log4go"
 )
 
@@ -46,13 +47,13 @@ func newPythonScript(scriptName string, path string, params []string) Script {
 func (sh ScriptInfo) Run(imageID ImageIDType) (b []byte, err error) {
 	jsonString, err := createCmd(imageID, sh.name, sh.staticBinary, sh.dirPath)
 	if err != nil {
-		blog.Error(err, ": Error in creating command")
+		except.Error(err, ": Error in creating command")
 		return
 	}
 	blog.Debug("Container spec: %s", string(jsonString))
 	containerID, err := CreateContainer(jsonString)
 	if err != nil {
-		blog.Error(err, ": Error in creating container")
+		except.Error(err, ": Error in creating container")
 		return
 	}
 	blog.Debug("New container ID: %s", containerID)
@@ -61,13 +62,13 @@ func (sh ScriptInfo) Run(imageID ImageIDType) (b []byte, err error) {
 
 	jsonString, err = StartContainer(containerID)
 	if err != nil {
-		blog.Error(err, ": Error in starting container")
+		except.Error(err, ": Error in starting container")
 		return
 	}
 	blog.Debug("Response from StartContainer: %s", string(jsonString))
 	statusCode, err := WaitContainer(containerID)
 	if err != nil {
-		blog.Error(err, ": Error in waiting for container to stop")
+		except.Error(err, ": Error in waiting for container to stop")
 		return
 	}
 	if statusCode != 0 {
@@ -76,13 +77,13 @@ func (sh ScriptInfo) Run(imageID ImageIDType) (b []byte, err error) {
 	}
 	b, err = LogsContainer(containerID)
 	if err != nil {
-		blog.Error(err, ":Error in extracting output from container")
+		except.Error(err, ":Error in extracting output from container")
 		return
 	}
 	/*
 		_, err = removeContainer(containerID)
 		if err != nil {
-			blog.Error(err, ":Error in removing container for image", containerID)
+			except.Error(err, ":Error in removing container for image", containerID)
 			return
 		}
 	*/

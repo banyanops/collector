@@ -12,7 +12,7 @@ import (
 
 	collector "github.com/banyanops/collector"
 	config "github.com/banyanops/collector/config"
-	exit "github.com/banyanops/collector/exit"
+	except "github.com/banyanops/collector/except"
 	fsutil "github.com/banyanops/collector/fsutil"
 	blog "github.com/ccpaging/log4go"
 	flag "github.com/docker/docker/pkg/mflag"
@@ -122,9 +122,11 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 				collector.PullImage(metadata)
 			}
 			PulledNew = append(PulledNew, metadata)
-			if !collector.LocalHost && *removeThresh > 0 && len(PulledNew) > *removeThresh {
-				collector.RemoveImages(PulledNew[0:*removeThresh], imageToMDMap)
-				PulledNew = PulledNew[*removeThresh:]
+			excess := len(PulledNew) - *removeThresh
+			if !collector.LocalHost && *removeThresh > 0 && excess > 0 {
+				config.BanyanUpdate("Removing " + strconv.Itoa(excess) + " pulled images")
+				collector.RemoveImages(PulledNew[0:excess], imageToMDMap)
+				PulledNew = PulledNew[excess:]
 			}
 			pulledImages[collector.ImageIDType(metadata.Image)] = true
 			if len(pulledImages) == IMAGEBATCH {
@@ -133,6 +135,8 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 		}
 
 		if len(pulledImages) == 0 {
+			blog.Info("No pulled images left to process in this iteration")
+			config.BanyanUpdate("No pulled images left to process in this iteration")
 			break
 		}
 		// get and save image data for all the images in pulledimages
@@ -142,7 +146,7 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 			processedImages[imageID] = true
 		}
 		if e := persistImageList(pulledImages); e != nil {
-			blog.Error(e, "Failed to persist list of collected images")
+			except.Error(e, "Failed to persist list of collected images")
 		}
 		if checkConfigUpdate(false) == true {
 			// Config changed, and possibly did so before all current metadata was processed.
@@ -167,14 +171,14 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 func getImageList(processedImages collector.ImageSet) (e error) {
 	f, e := os.Open(*imageList)
 	if e != nil {
-		blog.Warn(e, ": Error in opening", *imageList, ": perhaps a fresh start?")
+		except.Warn(e, ": Error in opening", *imageList, ": perhaps a fresh start?")
 		return
 	}
 	defer f.Close()
 	r := bufio.NewReader(f)
 	data, e := ioutil.ReadAll(r)
 	if e != nil {
-		blog.Error(e, ": Error in reading file ", *imageList)
+		except.Error(e, ": Error in reading file ", *imageList)
 		return
 	}
 	for _, str := range strings.Split(string(data), "\n") {
@@ -265,7 +269,7 @@ func setupLogging() {
 	blog.AddFilter("stdout", CONSOLELOGLEVEL, consoleLog)
 	f, e := os.OpenFile(LOGFILENAME, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if e != nil {
-		exit.Fail(e, ": Error in opening log file: ", LOGFILENAME)
+		except.Fail(e, ": Error in opening log file: ", LOGFILENAME)
 	}
 	f.Close()
 	flw := blog.NewFileLogWriter(LOGFILENAME, false)
@@ -315,7 +319,7 @@ func main() {
 	var e error
 	collector.DockerTransport, e = collector.NewDockerTransport(*dockerProto, *dockerAddr)
 	if e != nil {
-		exit.Fail(e, ": Error in connecting to docker remote API socket")
+		except.Fail(e, ": Error in connecting to docker remote API socket")
 	}
 
 	authToken := RegisterCollector()
@@ -328,6 +332,15 @@ func main() {
 	if collector.LocalHost == false && collector.RegistryAPIURL == "" {
 		collector.RegistryAPIURL, collector.HubAPI, collector.BasicAuth, collector.XRegistryAuth = collector.GetRegistryURL()
 		blog.Info("registry API URL: %s", collector.RegistryAPIURL)
+	}
+
+	// Log the docker version
+	major, minor, revision, e := collector.DockerVersion()
+	if e != nil {
+		except.Error(e, ": Could not identify Docker version")
+	} else {
+		blog.Info("Docker version %d.%d.%d", major, minor, revision)
+		config.BanyanUpdate("Docker version", strconv.Itoa(major), strconv.Itoa(minor), strconv.Itoa(revision))
 	}
 
 	// Images we have processed already

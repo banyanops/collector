@@ -10,9 +10,8 @@ import (
 	"strings"
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/credentialprovider"
-	exit "github.com/banyanops/collector/exit"
+	except "github.com/banyanops/collector/except"
 	gcr "github.com/banyanops/collector/gcr"
-	blog "github.com/ccpaging/log4go"
 	flag "github.com/docker/docker/pkg/mflag"
 )
 
@@ -67,7 +66,7 @@ func GetRegistryURL() (URL string, hubAPI bool, BasicAuth string, XRegistryAuth 
 	basicAuth, fullRegistry, XRegistryAuth := RegAuth(RegistrySpec)
 	if *AuthRegistry == true {
 		if basicAuth == "" {
-			exit.Fail("Registry auth could not be determined from docker config.")
+			except.Fail("Registry auth could not be determined from docker config.")
 		}
 		BasicAuth = basicAuth
 	}
@@ -86,7 +85,7 @@ func GetRegistryURL() (URL string, hubAPI bool, BasicAuth string, XRegistryAuth 
 		if strings.Contains(URL, "docker.io") || strings.Contains(URL, "gcr.io") {
 			hubAPI = true
 			if *RegistryTokenAuth == false {
-				blog.Warn("Forcing --registrytokenauth=true, as required for Docker Hub and Google Container Registry")
+				except.Warn("Forcing --registrytokenauth=true, as required for Docker Hub and Google Container Registry")
 				*RegistryTokenAuth = true
 			}
 		}
@@ -112,12 +111,12 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 	}
 
 	if len(DockerConfig) == 0 {
-		major, minor, revision, err := dockerVersion()
+		major, minor, revision, err := DockerVersion()
 		if err != nil {
-			exit.Fail("Could not determine Docker version")
+			except.Fail("Could not determine Docker version")
 		}
 		if major < 1 || (major == 1 && minor <= 2) {
-			exit.Fail("Unsupported docker version %d.%d.%d", major, minor, revision)
+			except.Fail("Unsupported docker version %d.%d.%d", major, minor, revision)
 		}
 		if major == 1 && minor <= 6 {
 			DockerConfig = os.Getenv("HOME") + "/.dockercfg"
@@ -131,15 +130,15 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 	data, err := ioutil.ReadFile(DockerConfig)
 	if err != nil {
 		if useDotDockerDir == false {
-			exit.Fail("Could not read %s", DockerConfig)
+			except.Fail("Could not read %s", DockerConfig)
 		}
 		// new .docker/config.json didn't work, so try the old .dockercfg
-		blog.Error("Could not read %s, trying $HOME/.dockercfg", DockerConfig)
+		except.Error("Could not read %s, trying $HOME/.dockercfg", DockerConfig)
 		DockerConfig = os.Getenv("HOME") + "/.dockercfg"
 		useDotDockerDir = false
 		data, err = ioutil.ReadFile(DockerConfig)
 		if err != nil {
-			exit.Fail("Could not read", DockerConfig)
+			except.Fail("Could not read", DockerConfig)
 		}
 	}
 
@@ -152,19 +151,19 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 		err = json.Unmarshal(data, &das)
 	}
 	if err != nil {
-		blog.Error(err, "Couldn't JSON unmarshal from docker auth data")
+		except.Error(err, "Couldn't JSON unmarshal from docker auth data")
 		return
 	}
 	for r, d := range das {
 		if r == registry || r == "https://"+registry || r == "https://"+registry+"/v1/" {
 			encData, err := base64.StdEncoding.DecodeString(d.Auth)
 			if err != nil {
-				blog.Error(err, ": error")
+				except.Error(err, ": error")
 				return
 			}
 			up := strings.Split(string(encData), ":")
 			if len(up) != 2 {
-				blog.Error("Invalid auth: %s", string(encData))
+				except.Error("Invalid auth: %s", string(encData))
 				return
 			}
 			if strings.HasSuffix(registry, "/v1/") {
@@ -253,7 +252,7 @@ func getAuthConfig(user, password, auth, email, registry string) (authConfig str
 	}
 	jsonString, err := json.Marshal(ac)
 	if err != nil {
-		exit.Fail("Failed to marshal authconfig")
+		except.Fail("Failed to marshal authconfig")
 	}
 	dst := make([]byte, base64.URLEncoding.EncodedLen(len(jsonString)))
 	base64.URLEncoding.Encode(dst, jsonString)
