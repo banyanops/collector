@@ -16,7 +16,12 @@ func Error(arg0 interface{}, args ...interface{}) {
 		s := fmt.Sprintf("ERROR %v", arg0)
 		config.BanyanUpdate(s)
 	} else {
-		blog.Error(arg0, args...)
+		switch arg0.(type) {
+		case string:
+			blog.Error(arg0.(string), args...)
+		default:
+			blog.Error(arg0, args...)
+		}
 		s := fmt.Sprintf("ERROR %v", arg0)
 		s = fmt.Sprintf(s, args...)
 		config.BanyanUpdate(s)
@@ -30,7 +35,12 @@ func Warn(arg0 interface{}, args ...interface{}) {
 		s := fmt.Sprintf("WARN %v", arg0)
 		config.BanyanUpdate(s)
 	} else {
-		blog.Warn(arg0, args...)
+		switch arg0.(type) {
+		case string:
+			blog.Warn(arg0.(string), args...)
+		default:
+			blog.Warn(arg0, args...)
+		}
 		s := fmt.Sprintf("WARN %v", arg0)
 		s = fmt.Sprintf(s, args...)
 		config.BanyanUpdate(s)

@@ -17,7 +17,12 @@ func Fail(arg0 interface{}, args ...interface{}) {
 	if len(args) == 0 {
 		blog.Error(arg0)
 	} else {
-		blog.Error(arg0, args...)
+		switch arg0.(type) {
+		case string:
+			blog.Error(arg0.(string), args...)
+		default:
+			blog.Error(arg0, args...)
+		}
 	}
 	blog.Close()
 	os.Exit(ErrorExitStatus)
