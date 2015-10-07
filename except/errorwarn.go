@@ -2,6 +2,7 @@ package except
 
 import (
 	"fmt"
+	"strings"
 
 	config "github.com/banyanops/collector/config"
 	blog "github.com/ccpaging/log4go"
@@ -16,14 +17,20 @@ func Error(arg0 interface{}, args ...interface{}) {
 		s := fmt.Sprintf("ERROR %v", arg0)
 		config.BanyanUpdate(s)
 	} else {
+		var s string
 		switch arg0.(type) {
 		case string:
 			blog.Error(arg0.(string), args...)
+			s = fmt.Sprintf("ERROR %s", arg0.(string))
+			s = fmt.Sprintf(s, args...)
 		default:
 			blog.Error(arg0, args...)
+			s = fmt.Sprintf("ERROR %v", arg0)
+			arr := []interface{}{s}
+			arr = append(arr, args...)
+			s = fmt.Sprintln(arr...)
 		}
-		s := fmt.Sprintf("ERROR %v", arg0)
-		s = fmt.Sprintf(s, args...)
+		s = strings.TrimRight(s, "\n")
 		config.BanyanUpdate(s)
 	}
 }
@@ -35,14 +42,20 @@ func Warn(arg0 interface{}, args ...interface{}) {
 		s := fmt.Sprintf("WARN %v", arg0)
 		config.BanyanUpdate(s)
 	} else {
+		var s string
 		switch arg0.(type) {
 		case string:
 			blog.Warn(arg0.(string), args...)
+			s = fmt.Sprintf("WARN %s", arg0.(string))
+			s = fmt.Sprintf(s, args...)
 		default:
 			blog.Warn(arg0, args...)
+			s = fmt.Sprintf("WARN %v", arg0)
+			arr := []interface{}{s}
+			arr = append(arr, args...)
+			s = fmt.Sprintln(arr...)
 		}
-		s := fmt.Sprintf("WARN %v", arg0)
-		s = fmt.Sprintf(s, args...)
+		s = strings.TrimRight(s, "\n")
 		config.BanyanUpdate(s)
 	}
 }
