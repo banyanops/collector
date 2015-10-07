@@ -1,7 +1,9 @@
 package except
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	config "github.com/banyanops/collector/config"
@@ -10,10 +12,7 @@ import (
 
 func bup(status ...string) {
 	fmt.Print("BANYANUPDATE: ")
-	for _, s := range status {
-		fmt.Printf("%s ", s)
-	}
-	fmt.Println()
+	fmt.Println(strings.Join(status, " "))
 }
 
 func TestError(t *testing.T) {
@@ -29,6 +28,12 @@ func TestError(t *testing.T) {
 	fmt.Println("Expected output: hello %d")
 	Error(b)
 	fmt.Println()
+
+	e := errors.New("An error message")
+	fmt.Println("Expected output: An error message hello %d")
+	Error(e, b)
+	fmt.Println()
+
 }
 
 func TestWarn(t *testing.T) {
@@ -43,6 +48,13 @@ func TestWarn(t *testing.T) {
 	fmt.Println()
 	fmt.Println("Expected output: hello %d")
 	Warn(b)
+	fmt.Println()
+
+	e := errors.New("An error message")
+	imageList := "imageList"
+	fmt.Println("Expected output: An error message: Error in opening imageList: perhaps a fresh start?")
+	Warn(e, ": Error in opening", imageList, ": perhaps a fresh start?")
+	fmt.Println()
 	blog.Close()
 }
 
