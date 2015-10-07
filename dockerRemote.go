@@ -364,6 +364,40 @@ func listImages() (resp []byte, err error) {
 	return
 }
 
+// ListDanglingImages calls Docker to get the list of dangling images, and
+// returns a list of their image IDs.
+func ListDanglingImages() (imageList []ImageIDType, err error) {
+	apipath := `/images/json?filters={"dangling":["true"]}`
+	// apipath = "/images/json"
+	resp, err := DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
+	if err != nil {
+		except.Error(err, "ListDanglingImages")
+		return
+	}
+
+	var localImageList []LocalImageStruct
+	if err = json.Unmarshal(resp, &localImageList); err != nil {
+		except.Error(err, "ListDanglingImages JSON unmarshal")
+		return
+	}
+
+	for _, imInfo := range localImageList {
+		imageList = append(imageList, ImageIDType(imInfo.ID))
+	}
+	return
+}
+
+// RemoveImageByID calls Docker to remove an image specified by ID.
+func RemoveImageByID(image ImageIDType) (resp []byte, err error) {
+	apipath := "/images/" + string(image)
+	resp, err = DockerAPI(DockerTransport, "DELETE", apipath, []byte{}, "")
+	if err != nil {
+		except.Error(err, "RemoveImageByID")
+		return
+	}
+	return
+}
+
 func InspectImage(imageID string) (resp []byte, err error) {
 	apipath := "/images/" + imageID + "/json"
 	resp, err = DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")

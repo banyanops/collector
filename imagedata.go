@@ -3,6 +3,7 @@
 package collector
 
 import (
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -26,7 +27,7 @@ type ImageDataInfo struct {
 // PullImage performs a docker pull on an image specified by repo/tag.
 // TODO: Detect if the pulled image has a different imageID than the value retrieved from
 // metadata, and if so correct the metadata, or at least skip processing the image.
-func PullImage(metadata ImageMetadataInfo) {
+func PullImage(metadata ImageMetadataInfo) (err error) {
 	tagspec := RegistrySpec + "/" + metadata.Repo + ":" + metadata.Tag
 	apipath := "/images/create?fromImage=" + tagspec
 	blog.Info("PullImage downloading %s, Image ID: %s", apipath, metadata.Image)
@@ -34,9 +35,11 @@ func PullImage(metadata ImageMetadataInfo) {
 	resp, err := DockerAPI(DockerTransport, "POST", apipath, []byte{}, XRegistryAuth)
 	if err != nil {
 		except.Error(err, "PullImage failed for", RegistrySpec, metadata.Repo, metadata.Tag, metadata.Image)
+		return
 	}
 	if strings.Contains(string(resp), `"error":`) {
 		except.Error("PullImage error for %s/%s/%s", RegistrySpec, metadata.Repo, metadata.Tag)
+		err = errors.New("PullImage error for " + RegistrySpec + "/" + metadata.Repo + "/" + metadata.Tag)
 	}
 	blog.Trace(string(resp))
 	return
@@ -74,6 +77,31 @@ func RemoveImages(PulledImages []ImageMetadataInfo, imageToMDMap map[string][]Im
 	}
 
 	blog.Info("Number of repo/tags removed this time around: %d", numRemoved)
+
+	RemoveDanglingImages()
+	return
+}
+
+// RemoveDanglingImages deletes any dangling images (untagged and unreferenced intermediate layers).
+func RemoveDanglingImages() (e error) {
+	dangling, err := ListDanglingImages()
+	if err != nil {
+		except.Error(err, "RemoveDanglingImages")
+		return err
+	}
+	if len(dangling) == 0 {
+		return
+	}
+
+	for _, image := range dangling {
+		_, err = RemoveImageByID(image)
+		if err != nil {
+			except.Error(err, "RemoveDanglingImages")
+			e = err
+			continue
+		}
+		blog.Info("Removed dangling image %s", string(image))
+	}
 	return
 }
 

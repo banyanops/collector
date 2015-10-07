@@ -96,6 +96,11 @@ func (m MetadataSet) Exists(metadata ImageMetadataInfo) bool {
 	return ok
 }
 
+// Delete removes the metadata entry from the MetadataSet.
+func (m MetadataSet) Delete(metadata ImageMetadataInfo) {
+	delete(m, metadata)
+}
+
 // NewImageToMetadataMap is a constructor for ImageToMetadataMap.
 func NewImageToMetadataMap(s MetadataSet) ImageToMetadataMap {
 	m := make(map[ImageIDType]ImageMetadataInfo)

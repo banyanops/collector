@@ -36,7 +36,20 @@ func TestPullImage(t *testing.T) {
 		Tag:  "latest",
 	}
 	fmt.Println("TestPullImage %v", metadata)
-	PullImage(metadata)
+	err := PullImage(metadata)
+	if err != nil {
+		t.Fatal(e)
+	}
+	return
+}
+
+func TestRemoveDanglingImages(t *testing.T) {
+	fmt.Println("TestRemoveDanglingImages")
+	DockerTransport, e = NewDockerTransport(DOCKERPROTO, DOCKERADDR)
+	if e != nil {
+		t.Fatal(e)
+	}
+	RemoveDanglingImages
 	return
 }
 

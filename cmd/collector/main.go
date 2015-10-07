@@ -119,7 +119,20 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 
 			// docker pull image
 			if !collector.LocalHost {
-				collector.PullImage(metadata)
+				err := collector.PullImage(metadata)
+				if err != nil {
+					// docker pull failed for some reason, possibly a transient failure.
+					// So we remove this metadata element from the current and processed sets,
+					// and move on to process any remaining metadata elements.
+					// In the next iteration, metadata
+					// lookup may rediscover this deleted metadata element
+					// and treat it as new, thus ensuring that the image pull will be retried.
+					// TODO: If the registry is corrupted, this can lead to an infinite
+					// loop in which the same image pull keeps getting tried and consistently fails.
+					currentMetadataSet.Delete(metadata)
+					processedMetadata.Delete(metadata)
+					continue
+				}
 			}
 			PulledNew = append(PulledNew, metadata)
 			excess := len(PulledNew) - *removeThresh
