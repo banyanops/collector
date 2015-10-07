@@ -29,13 +29,14 @@ const (
 
 var (
 	LOGFILENAME = config.BANYANDIR() + "/hostcollector/collector.log"
+	fileLog     = flag.Bool([]string{"-filelog"}, false, "Log output to "+LOGFILENAME)
 	imageList   = flag.String([]string{"#-imagelist"}, config.BANYANDIR()+"/hostcollector/imagelist",
 		"List of previously collected images (file)")
 	repoList = flag.String([]string{"r", "-repolist"}, config.BANYANDIR()+"/hostcollector/repolist",
 		"File containing list of repos to process")
 
 	// Configuration parameters for speed/efficiency
-	removeThresh = flag.Int([]string{"-removethresh"}, 10,
+	removeThresh = flag.Int([]string{"-removethresh"}, 5,
 		"Number of images that get pulled before removal")
 	maxImages = flag.Int([]string{"-maximages"}, 0, "Maximum number of new images to process per repository (0=unlimited)")
 	//nextMaxImages int
@@ -131,6 +132,10 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 					// loop in which the same image pull keeps getting tried and consistently fails.
 					currentMetadataSet.Delete(metadata)
 					processedMetadata.Delete(metadata)
+					err = collector.RemoveDanglingImages()
+					if err != nil {
+						except.Error(err, ": RemoveDanglingImages")
+					}
 					continue
 				}
 			}
@@ -280,13 +285,15 @@ func setupLogging() {
 	consoleLog := blog.NewConsoleLogWriter()
 	consoleLog = consoleLog.SetColor(true)
 	blog.AddFilter("stdout", CONSOLELOGLEVEL, consoleLog)
-	f, e := os.OpenFile(LOGFILENAME, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if e != nil {
-		except.Fail(e, ": Error in opening log file: ", LOGFILENAME)
+	if *fileLog == true {
+		f, e := os.OpenFile(LOGFILENAME, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if e != nil {
+			except.Fail(e, ": Error in opening log file: ", LOGFILENAME)
+		}
+		f.Close()
+		flw := blog.NewFileLogWriter(LOGFILENAME, false)
+		blog.AddFilter("file", FILELOGLEVEL, flw)
 	}
-	f.Close()
-	flw := blog.NewFileLogWriter(LOGFILENAME, false)
-	blog.AddFilter("file", FILELOGLEVEL, flw)
 }
 
 // copyBanyanData copies all the default scripts and binaries (e.g., bash-static, python-static, etc.)

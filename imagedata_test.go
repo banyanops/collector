@@ -43,16 +43,6 @@ func TestPullImage(t *testing.T) {
 	return
 }
 
-func TestRemoveDanglingImages(t *testing.T) {
-	fmt.Println("TestRemoveDanglingImages")
-	DockerTransport, e = NewDockerTransport(DOCKERPROTO, DOCKERADDR)
-	if e != nil {
-		t.Fatal(e)
-	}
-	RemoveDanglingImages
-	return
-}
-
 func TestRemoveImage(t *testing.T) {
 	fmt.Println("TestRemoveImage")
 	TestPullImage(t)
