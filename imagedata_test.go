@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -32,7 +33,7 @@ func TestPullImage(t *testing.T) {
 	RegistrySpec = "index.docker.io"
 	RegistryAPIURL, HubAPI, BasicAuth, XRegistryAuth = GetRegistryURL()
 	metadata := ImageMetadataInfo{
-		Repo: "busybox",
+		Repo: "library/busybox",
 		Tag:  "latest",
 	}
 	fmt.Println("TestPullImage %v", metadata)
@@ -43,11 +44,37 @@ func TestPullImage(t *testing.T) {
 	return
 }
 
+func TestPullImageBogusID(t *testing.T) {
+	fmt.Println("TestPullImageBogusID")
+	var e error
+	DockerTransport, e = NewDockerTransport(DOCKERPROTO, DOCKERADDR)
+	if e != nil {
+		t.Fatal(e)
+	}
+	RegistrySpec = "index.docker.io"
+	RegistryAPIURL, HubAPI, BasicAuth, XRegistryAuth = GetRegistryURL()
+	metadata := ImageMetadataInfo{
+		Repo:  "busybox",
+		Tag:   "latest",
+		Image: "Bogus",
+	}
+	fmt.Println("TestPullImage %v", metadata)
+	err := PullImage(metadata)
+	if err == nil {
+		t.Fatal("PullImage was supposed to return an error here")
+	}
+	if !strings.HasPrefix(err.Error(), "PullImage busybox") {
+		t.Fatal("Unexpected error: " + err.Error())
+	}
+	fmt.Printf("Received expected error %s\n", err.Error())
+	return
+}
+
 func TestRemoveImage(t *testing.T) {
 	fmt.Println("TestRemoveImage")
 	TestPullImage(t)
 	metadata1 := ImageMetadataInfo{
-		Repo: "busybox",
+		Repo: "library/busybox",
 		Tag:  "latest",
 	}
 	/*
@@ -58,7 +85,7 @@ func TestRemoveImage(t *testing.T) {
 	*/
 	// fmt.Println("TestRemoveImage %v %v", metadata1, metadata2)
 	fmt.Println("TestRemoveImage %v", metadata1)
-	RemoveImages([]ImageMetadataInfo{metadata1}, GetImageToMDMap([]ImageMetadataInfo{metadata1 /*, metadata2*/}))
+	RemoveImages([]ImageMetadataInfo{metadata1})
 	return
 }
 

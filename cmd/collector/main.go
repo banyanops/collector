@@ -76,7 +76,6 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 
 	// number of images processed for each repository in this iteration
 	imageCount := make(map[collector.RepoType]int)
-	imageToMDMap := collector.GetImageToMDMap(metadataSlice)
 
 	// Set of repos to stop limiting according to maxImages after this iteration completes.
 	StopLimiting := NewRepoSet()
@@ -143,7 +142,7 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 			excess := len(PulledNew) - *removeThresh
 			if !collector.LocalHost && *removeThresh > 0 && excess > 0 {
 				config.BanyanUpdate("Removing " + strconv.Itoa(excess) + " pulled images")
-				collector.RemoveImages(PulledNew[0:excess], imageToMDMap)
+				collector.RemoveImages(PulledNew[0:excess])
 				PulledNew = PulledNew[excess:]
 			}
 			pulledImages[collector.ImageIDType(metadata.Image)] = true
@@ -360,7 +359,7 @@ func main() {
 		except.Error(e, ": Could not identify Docker version")
 	} else {
 		blog.Info("Docker version %d.%d.%d", major, minor, revision)
-		config.BanyanUpdate("Docker version", strconv.Itoa(major), strconv.Itoa(minor), strconv.Itoa(revision))
+		config.BanyanUpdate("Docker version", strconv.Itoa(major)+"."+strconv.Itoa(minor)+"."+strconv.Itoa(revision))
 	}
 
 	// Images we have processed already

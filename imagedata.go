@@ -25,8 +25,6 @@ type ImageDataInfo struct {
 }
 
 // PullImage performs a docker pull on an image specified by repo/tag.
-// TODO: Detect if the pulled image has a different imageID than the value retrieved from
-// metadata, and if so correct the metadata, or at least skip processing the image.
 func PullImage(metadata ImageMetadataInfo) (err error) {
 	tagspec := RegistrySpec + "/" + metadata.Repo + ":" + metadata.Tag
 	apipath := "/images/create?fromImage=" + tagspec
@@ -42,34 +40,77 @@ func PullImage(metadata ImageMetadataInfo) (err error) {
 		err = errors.New("PullImage error for " + RegistrySpec + "/" + metadata.Repo + "/" + metadata.Tag)
 	}
 	blog.Trace(string(resp))
+
+	if metadata.Image > "" {
+		// verify the image ID of the pulled image matches the expected metadata.
+		imageMap, err := GetLocalImages(false, false)
+		if err != nil {
+			except.Error(err, ": PullImage unable to list local images")
+		}
+	OUTERLOOP:
+		for imageID, repotagSlice := range imageMap {
+			for _, repotag := range repotagSlice {
+				if string(repotag.Repo) == metadata.Repo && string(repotag.Tag) == metadata.Tag {
+					if string(imageID) == metadata.Image {
+						// image IDs match, we're all good.
+						break OUTERLOOP
+					}
+					// image ID doesn't match. Remove the image and return an error.
+					newMetadata := metadata
+					newMetadata.Image = string(imageID)
+					RemoveImages([]ImageMetadataInfo{newMetadata})
+					err = errors.New("PullImage " + metadata.Repo + ":" + metadata.Tag +
+						" image ID " + string(imageID) + " doesn't match metadata-derived ID " +
+						metadata.Image)
+					return err
+				}
+			}
+		}
+	}
 	return
 }
 
 // RemoveImages removes least recently pulled docker images from the local docker host.
-func RemoveImages(PulledImages []ImageMetadataInfo, imageToMDMap map[string][]ImageMetadataInfo) {
+func RemoveImages(PulledImages []ImageMetadataInfo) {
 	numRemoved := 0
-	for _, imageMD := range PulledImages {
-		// Get all metadata (repo/tags) associated with that image
-		for _, metadata := range imageToMDMap[imageMD.Image] {
+	imageMap, err := GetLocalImages(false, false)
+	if err != nil {
+		except.Error(err, ": RemoveImages unable to list local images")
+	}
+	for _, metadata := range PulledImages {
+		if strings.HasPrefix(metadata.Repo, "library/") {
+			metadata.Repo = strings.Replace(metadata.Repo, "library/", "", 1)
+		}
+		imageID := ImageIDType(metadata.Image)
+		if metadata.Image == "" {
+			// unknown image ID. Search the repotags for a match
+			var err error
+			imageID, err = imageMap.Image(RepoType(metadata.Repo), TagType(metadata.Tag))
+			if err != nil {
+				except.Error(err, ": RemoveImages unable to find image ID")
+				break
+			}
+		}
+
+		// Get all repo:tags associated with the image
+		repoTagSlice := imageMap.RepoTags(imageID)
+		if len(repoTagSlice) == 0 {
+			except.Error("RemoveImages unable to find expected repo:tag " + metadata.Repo +
+				":" + metadata.Tag + " for image ID=" + string(imageID))
+			except.Error("imageMap is %v", imageMap)
+			continue
+		}
+		for _, repotag := range repoTagSlice {
 			// basespec := RegistrySpec + "/" + string(t.Repo) + ":"
-			if ExcludeRepo[RepoType(metadata.Repo)] {
+			if ExcludeRepo[RepoType(repotag.Repo)] {
 				continue
 			}
-			blog.Debug("Removing the following registry/repo:tag: " + RegistrySpec + "/" +
-				metadata.Repo + ":" + metadata.Tag)
-			apipath := "/images/" + RegistrySpec + "/" + metadata.Repo + ":" + metadata.Tag
-			if RegistrySpec == "index.docker.io" {
-				repoName := metadata.Repo
-				if strings.HasPrefix(metadata.Repo, "library/") {
-					repoName = strings.Replace(repoName, "library/", "", 1)
-				}
-				apipath = "/images/" + repoName + ":" + metadata.Tag
-			}
+			apipath := "/images/" + string(repotag.Repo) + ":" + string(repotag.Tag)
 			blog.Info("RemoveImages %s", apipath)
 			config.BanyanUpdate("Remove", apipath)
 			_, err := DockerAPI(DockerTransport, "DELETE", apipath, []byte{}, "")
 			if err != nil {
-				except.Error(err, "RemoveImages Repo:Tag", metadata.Repo, metadata.Tag,
+				except.Error(err, "RemoveImages Repo:Tag", repotag.Repo, repotag.Tag,
 					"image", metadata.Image)
 			}
 			numRemoved++

@@ -207,6 +207,31 @@ func (imageMap ImageToRepoTagMap) Insert(imageID ImageIDType, repotag RepoTagTyp
 	}
 }
 
+// RepoTags returns the repos and tags associated with imageID.
+func (imageMap ImageToRepoTagMap) RepoTags(imageID ImageIDType) []RepoTagType {
+	if repotag, ok := imageMap[imageID]; ok {
+		return repotag
+	}
+	return []RepoTagType{}
+}
+
+// Image returns the imageID corresponding to a specified repo:tag.
+func (imageMap ImageToRepoTagMap) Image(repo RepoType, tag TagType) (imageID ImageIDType, err error) {
+	if strings.HasPrefix(string(repo), "library/") {
+		repo = RepoType(strings.Replace(string(repo), "library/", "", 1))
+	}
+	for i, repotagSlice := range imageMap {
+		for _, repotag := range repotagSlice {
+			if repotag.Repo == repo && repotag.Tag == tag {
+				imageID = i
+				return
+			}
+		}
+	}
+	err = errors.New("Unable to find image ID for " + string(repo) + ":" + string(tag))
+	return
+}
+
 // FilterRepoTag returns a new ImageToRepoTagMap that only has elements that match the given repo:tag.
 func (imageMap ImageToRepoTagMap) FilterRepoTag(repotag RepoTagType) (newImageMap ImageToRepoTagMap) {
 	newImageMap = make(ImageToRepoTagMap)
@@ -258,16 +283,21 @@ func CheckRepoToProcess(repo RepoType) bool {
 // "localhost:5000" is a registry
 // "test/busybox" is a repository
 // "latest" is a tag
-// ExtractRepoTag strips out registry and returns repo and tag in RepoTagType
-func ExtractRepoTag(regRepoTag string) (repoTag RepoTagType, e error) {
+// ExtractRepoTag conditionally strips out registry and returns repo and tag in RepoTagType
+func ExtractRepoTag(regRepoTag string, stripReg bool) (repoTag RepoTagType, e error) {
 
 	ss := strings.Split(regRepoTag, ":")
 	if len(ss) < 2 || len(ss) > 3 {
-		e := errors.New("regRepoTag string has a wrong format: " + regRepoTag)
+		e := errors.New("regRepoTag string has invalid format: " + regRepoTag)
 		return repoTag, e
 	}
 	tag := ss[len(ss)-1]                               // the last component is a tag
 	regRepo := regRepoTag[:len(regRepoTag)-len(tag)-1] // the remainder as registry + repository
+
+	if !stripReg {
+		repoTag = RepoTagType{Repo: RepoType(regRepo), Tag: TagType(tag)}
+		return repoTag, e
+	}
 
 	ss = strings.Split(regRepo, "/")
 	if len(ss) > 1 && strings.ContainsAny(ss[0], ".:") {
@@ -279,7 +309,9 @@ func ExtractRepoTag(regRepoTag string) (repoTag RepoTagType, e error) {
 }
 
 // GetLocalImages queries the local Docker daemon for list of images.
-func GetLocalImages() (imageMap ImageToRepoTagMap, e error) {
+// The registry name gets stripped from the repo nam if stripRegistry is set to true.
+// The repo has to appear in the list of repos to check if checkRepo is set to true.
+func GetLocalImages(stripRegistry bool, checkRepo bool) (imageMap ImageToRepoTagMap, e error) {
 
 	// query a list of images from Docker daemon
 	response, e := listImages()
@@ -299,17 +331,20 @@ func GetLocalImages() (imageMap ImageToRepoTagMap, e error) {
 		for _, regRepoTag := range localImage.RepoTags {
 			// skip images with no repo:tag
 			if regRepoTag == "" || regRepoTag == "\u003cnone\u003e:\u003cnone\u003e" || regRepoTag == "<none>:<none>" {
-				blog.Info("Image %s has a <none>:<none> repository:tag.", string(imageID))
+				blog.Debug("Image %s has a <none>:<none> repository:tag.", string(imageID))
 				continue
 			}
 
-			repoTag, e := ExtractRepoTag(regRepoTag)
+			repoTag, e := ExtractRepoTag(regRepoTag, stripRegistry)
 			if e != nil {
 				return nil, e
 			}
-			blog.Debug(imageID, regRepoTag, repoTag)
 
-			if CheckRepoToProcess(repoTag.Repo) {
+			if checkRepo {
+				if CheckRepoToProcess(repoTag.Repo) {
+					imageMap.Insert(imageID, repoTag)
+				}
+			} else {
 				imageMap.Insert(imageID, repoTag)
 			}
 		}
@@ -322,7 +357,7 @@ func GetLocalImages() (imageMap ImageToRepoTagMap, e error) {
 func GetLocalImageMetadata(oldMetadataSet MetadataSet) (metadataSlice []ImageMetadataInfo) {
 	for {
 		blog.Info("Get a list of images from local Docker daemon")
-		imageMap, e := GetLocalImages()
+		imageMap, e := GetLocalImages(true, true)
 		if e != nil {
 			except.Warn(e, " GetLocalImages")
 			except.Warn("Retrying")
@@ -628,10 +663,11 @@ func v1GetTags(repoSlice []RepoType) (tagSlice []TagInfo, e error) {
 	}
 	for _, repo := range repoSlice {
 		// get tags for one repo
-		response, err := RegistryQuery(client, RegistryAPIURL+"/v1/repositories/"+string(repo)+"/tags")
-		if err != nil {
-			except.Error(err)
-			if s, ok := err.(*HTTPStatusCodeError); ok {
+		var response []byte
+		response, e = RegistryQuery(client, RegistryAPIURL+"/v1/repositories/"+string(repo)+"/tags")
+		if e != nil {
+			except.Error(e)
+			if s, ok := e.(*HTTPStatusCodeError); ok {
 				except.Error("Skipping Repo: %s, tag lookup status code %d", string(repo), s.StatusCode)
 				continue
 			}
