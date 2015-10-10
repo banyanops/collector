@@ -62,6 +62,7 @@ func PullImage(metadata ImageMetadataInfo) (err error) {
 					err = errors.New("PullImage " + metadata.Repo + ":" + metadata.Tag +
 						" image ID " + string(imageID) + " doesn't match metadata-derived ID " +
 						metadata.Image)
+					except.Error(err)
 					return err
 				}
 			}

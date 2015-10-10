@@ -85,6 +85,7 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 
 	for {
 		pulledImages := collector.NewImageSet()
+		pullErrorMetadata := collector.NewMetadataSet()
 		for _, metadata := range metadataSlice {
 			processedMetadata.Insert(metadata)
 			if config.FilterRepos && !collector.ReposToProcess[collector.RepoType(metadata.Repo)] {
@@ -131,6 +132,8 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 					// loop in which the same image pull keeps getting tried and consistently fails.
 					currentMetadataSet.Delete(metadata)
 					processedMetadata.Delete(metadata)
+					// remember this pull error in order to demote this metadata to the end of the slice.
+					pullErrorMetadata.Insert(metadata)
 					err = collector.RemoveDanglingImages()
 					if err != nil {
 						except.Error(err, ": RemoveDanglingImages")
@@ -156,6 +159,19 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 			config.BanyanUpdate("No pulled images left to process in this iteration")
 			break
 		}
+
+		// reorder metadataSlice by moving images that couldn't be pulled to the end of the list
+		newMDSlice := []collector.ImageMetadataInfo{}
+		for _, metadata := range metadataSlice {
+			if !pullErrorMetadata.Exists(metadata) {
+				newMDSlice = append(newMDSlice, metadata)
+			}
+		}
+		for metadata := range pullErrorMetadata {
+			newMDSlice = append(newMDSlice, metadata)
+		}
+		metadataSlice = newMDSlice
+
 		// get and save image data for all the images in pulledimages
 		outMapMap := collector.GetImageAllData(pulledImages)
 		collector.SaveImageAllData(outMapMap)

@@ -35,6 +35,8 @@ const (
 	HTTPTIMEOUT = 32 * time.Second
 	// TARGETCONTAINERDIR is the path in the target container where the exported binaries and scripts are located.
 	TARGETCONTAINERDIR = "/banyancollector"
+	// DockerTimeout specifies how long to wait for Docker daemon to finish a task, like pull image.
+	DockerTimeout = time.Minute * 10
 )
 
 type HostConfig struct {
@@ -179,7 +181,7 @@ func DockerAPI(tr *http.Transport, operation, apipath string, jsonString []byte,
 	}
 
 	//req.Header.Set("Authorization", "Bearer "+authToken)
-	client := &http.Client{Transport: tr}
+	client := &http.Client{Transport: tr, Timeout: DockerTimeout}
 	r, e := client.Do(req)
 	if e != nil {
 		except.Error(e, ":DockerAPI URL", URL, "client request failed")
