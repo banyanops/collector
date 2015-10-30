@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/credentialprovider"
 	except "github.com/banyanops/collector/except"
 	gcr "github.com/banyanops/collector/gcr"
 	flag "github.com/docker/docker/pkg/mflag"
+	"k8s.io/kubernetes/pkg/credentialprovider"
 )
 
 const ()

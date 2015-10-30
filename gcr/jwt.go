@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/credentialprovider"
 	except "github.com/banyanops/collector/except"
 	"github.com/golang/glog"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"golang.org/x/oauth2/jwt"
+	"k8s.io/kubernetes/pkg/credentialprovider"
 )
 
 const (
