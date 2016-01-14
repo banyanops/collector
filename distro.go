@@ -3,6 +3,7 @@
 package collector
 
 import (
+	"regexp"
 	"strings"
 
 	except "github.com/banyanops/collector/except"
@@ -28,6 +29,35 @@ var DistroMap = map[string]string{
 	"Debian GNU/Linux stretch/sid":               "DEBIAN-stretch-sid",
 }
 
+// distroRegexp is a map of compiled regular expressions indexed by names.
+var distroRegexp = make(map[regexpPattern]*regexp.Regexp)
+
+type regexpPattern int
+
+const (
+	rel6z regexpPattern = iota
+	rel5z
+)
+
+func init() {
+	type elem struct {
+		name    regexpPattern
+		pattern string
+	}
+	patternList := []elem{
+		elem{name: rel6z, pattern: `release 6\.([\d]+)`},
+		elem{name: rel5z, pattern: `release 5\.([\d]+)`},
+	}
+
+	for _, p := range patternList {
+		r, err := regexp.Compile(p.pattern)
+		if err != nil {
+			except.Fail(err, p.name, p.pattern)
+		}
+		distroRegexp[p.name] = r
+	}
+}
+
 // getDistroID takes a distribution "pretty name" as input and returns the corresponding
 // distribution ID, or "Unknown" if no match can be found.
 func getDistroID(distroName string) string {
@@ -48,18 +78,22 @@ func getDistroID(distroName string) string {
 	if strings.HasPrefix(distroName, `Ubuntu 10.04`) {
 		return "UBUNTU-lucid"
 	}
-	if strings.HasPrefix(distroName, `CentOS release 5`) {
-		return "REDHAT-5Server"
-	}
-	if strings.HasPrefix(distroName, `CentOS release 6`) {
-		return "REDHAT-6Server"
-	}
-	if strings.HasPrefix(distroName, `Red Hat Enterprise Linux Server release 5`) ||
+	if strings.HasPrefix(distroName, `CentOS release 5`) ||
+		strings.HasPrefix(distroName, `Red Hat Enterprise Linux Server release 5`) ||
 		strings.HasPrefix(distroName, `Red Hat Enterprise Linux Server 5`) {
+		m := distroRegexp[rel5z].FindStringSubmatch(distroName)
+		if len(m) > 1 {
+			return "REDHAT-5Server-5." + m[1]
+		}
 		return "REDHAT-5Server"
 	}
-	if strings.HasPrefix(distroName, `Red Hat Enterprise Linux Server release 6`) ||
+	if strings.HasPrefix(distroName, `CentOS release 6`) ||
+		strings.HasPrefix(distroName, `Red Hat Enterprise Linux Server release 6`) ||
 		strings.HasPrefix(distroName, `Red Hat Enterprise Linux Server 6`) {
+		m := distroRegexp[rel6z].FindStringSubmatch(distroName)
+		if len(m) > 1 {
+			return "REDHAT-6Server-6." + m[1]
+		}
 		return "REDHAT-6Server"
 	}
 	if strings.HasPrefix(distroName, `Red Hat Enterprise Linux Server release 7`) ||

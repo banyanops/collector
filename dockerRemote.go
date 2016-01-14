@@ -169,7 +169,7 @@ func DockerAPI(tr *http.Transport, operation, apipath string, jsonString []byte,
 		}
 	}
 	URL := HTTP + host + apipath
-	blog.Debug("DockerAPI %s", URL)
+	blog.Info("DockerAPI %s", URL)
 	req, e := http.NewRequest(operation, URL, bytes.NewBuffer(jsonString))
 	if e != nil {
 		except.Error(e, ":DockerAPI failed to create http request")

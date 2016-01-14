@@ -161,7 +161,7 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 				except.Error(err, ": error")
 				return
 			}
-			up := strings.Split(string(encData), ":")
+			up := strings.SplitN(string(encData), ":", 2)
 			if len(up) != 2 {
 				except.Error("Invalid auth: %s", string(encData))
 				return

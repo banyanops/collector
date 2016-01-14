@@ -164,22 +164,3 @@ func TestGetTagsMetadataHub(t *testing.T) {
 	fmt.Print(tagSlice)
 	return
 }
-
-func TestParseDistro(t *testing.T) {
-	fmt.Println("TestParseDistro")
-	var tests = []struct {
-		pretty   string
-		codename string
-	}{
-		{"Ubuntu 14.04.1 LTS", "UBUNTU-trusty"},
-		{"CentOS Linux 7 (Core)", "REDHAT-7Server"},
-	}
-	for _, trial := range tests {
-		distro := getDistroID(trial.pretty)
-		if distro != trial.codename {
-			t.Fatal("input:", trial.pretty, "output", distro, "expected:", trial.codename)
-		}
-		fmt.Println("Found distro: ", distro)
-	}
-	return
-}
