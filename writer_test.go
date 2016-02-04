@@ -101,9 +101,9 @@ func TestWriteImageMetadata(t *testing.T) {
 
 	// Testing imagedata...
 	var imdata = []ImageMetadataInfo{
-		{"111", time.Now(), "r1", "t1", 100, "a1", "c1", "c1", "p1"},
-		{"121", time.Now(), "r2", "t2", 100, "a2", "c2", "c2", "p2"},
-		{"131", time.Now(), "r3", "t3", 100, "a3", "c3", "c3", "p3"},
+		{"111", time.Now(), "r1", "t1", 100, "a1", "c1", "c1", "p1", ""},
+		{"121", time.Now(), "r2", "t2", 100, "a2", "c2", "c2", "p2", ""},
+		{"131", time.Now(), "r3", "t3", 100, "a3", "c3", "c3", "p3", ""},
 	}
 
 	// Remove output file if it already exists -- since we append

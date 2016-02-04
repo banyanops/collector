@@ -63,9 +63,10 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 	processedImages collector.ImageSet, oldMetadataSet collector.MetadataSet,
 	PulledList []collector.ImageMetadataInfo) (currentMetadataSet collector.MetadataSet,
 	PulledNew []collector.ImageMetadataInfo) {
+
 	blog.Debug("DoIteration: processedImages is %v", processedImages)
 	PulledNew = PulledList
-	_ /*tagSlice*/, metadataSlice, currentMetadataSet := collector.GetNewImageMetadata(oldMetadataSet)
+	metadataSlice, currentMetadataSet := collector.GetNewImageMetadata(oldMetadataSet)
 
 	if len(metadataSlice) == 0 {
 		blog.Info("No new metadata in this iteration")
@@ -85,9 +86,11 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 
 	for {
 		pulledImages := collector.NewImageSet()
+		pulledImagesManifestHash := collector.NewImageSet()
 		pullErrorMetadata := collector.NewMetadataSet()
-		for _, metadata := range metadataSlice {
-			processedMetadata.Insert(metadata)
+		for index, _ := range metadataSlice {
+			metadata := &metadataSlice[index]
+			processedMetadata.Insert(*metadata)
 			if config.FilterRepos && !collector.ReposToProcess[collector.RepoType(metadata.Repo)] {
 				continue
 			}
@@ -95,7 +98,11 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 			if collector.ExcludeRepo[collector.RepoType(metadata.Repo)] {
 				continue
 			}
-			if pulledImages[collector.ImageIDType(metadata.Image)] {
+			if len(metadata.Image) > 0 && pulledImages.Exists(collector.ImageIDType(metadata.Image)) {
+				continue
+			}
+			if len(metadata.ManifestHash) > 0 &&
+				pulledImagesManifestHash.Exists(collector.ImageIDType(metadata.ManifestHash)) {
 				continue
 			}
 			// TODO: need to consider maxImages limit also when collecting from local Docker host?
@@ -112,11 +119,16 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 				StopLimiting[repo] = true
 				continue
 			}
-			if processedImages[collector.ImageIDType(metadata.Image)] {
+			if len(metadata.Image) > 0 && processedImages.Exists(collector.ImageIDType(metadata.Image)) {
+				continue
+			}
+			if len(metadata.ManifestHash) > 0 && processedImages.Exists(collector.ImageIDType(metadata.ManifestHash)) {
 				continue
 			}
 
 			imageCount[collector.RepoType(metadata.Repo)]++
+
+			ImageLenBeforePull := len(metadata.Image)
 
 			// docker pull image
 			if !collector.LocalHost {
@@ -130,25 +142,32 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 					// and treat it as new, thus ensuring that the image pull will be retried.
 					// TODO: If the registry is corrupted, this can lead to an infinite
 					// loop in which the same image pull keeps getting tried and consistently fails.
-					currentMetadataSet.Delete(metadata)
-					processedMetadata.Delete(metadata)
+					currentMetadataSet.Delete(*metadata)
+					processedMetadata.Delete(*metadata)
 					// remember this pull error in order to demote this metadata to the end of the slice.
-					pullErrorMetadata.Insert(metadata)
+					pullErrorMetadata.Insert(*metadata)
 					err = collector.RemoveDanglingImages()
 					if err != nil {
 						except.Error(err, ": RemoveDanglingImages")
 					}
 					continue
 				}
+				processedMetadata.Replace(*metadata)
+				if ImageLenBeforePull == 0 && len(metadata.Image) > 0 {
+					// Docker daemon computed the image ID for us, so now we can record this entry.
+					collector.SaveImageMetadata([]collector.ImageMetadataInfo{*metadata})
+				}
 			}
-			PulledNew = append(PulledNew, metadata)
+			PulledNew = append(PulledNew, *metadata)
 			excess := len(PulledNew) - *removeThresh
 			if !collector.LocalHost && *removeThresh > 0 && excess > 0 {
 				config.BanyanUpdate("Removing " + strconv.Itoa(excess) + " pulled images")
 				collector.RemoveImages(PulledNew[0:excess])
 				PulledNew = PulledNew[excess:]
 			}
-			pulledImages[collector.ImageIDType(metadata.Image)] = true
+			blog.Info("Added image %s to pulledImages", metadata.Image)
+			pulledImages.Insert(collector.ImageIDType(metadata.Image))
+			pulledImagesManifestHash.Insert(collector.ImageIDType(metadata.ManifestHash))
 			if len(pulledImages) == IMAGEBATCH {
 				break
 			}
@@ -176,10 +195,16 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 		outMapMap := collector.GetImageAllData(pulledImages)
 		collector.SaveImageAllData(outMapMap)
 		for imageID := range pulledImages {
-			processedImages[imageID] = true
+			processedImages.Insert(imageID)
+		}
+		for manifestHash := range pulledImagesManifestHash {
+			processedImages.Insert(manifestHash)
 		}
 		if e := persistImageList(pulledImages); e != nil {
 			except.Error(e, "Failed to persist list of collected images")
+		}
+		if e := persistImageManifestHashList(pulledImagesManifestHash); e != nil {
+			except.Error(e, "Failed to persist list of collected image manifest hashes")
 		}
 		if checkConfigUpdate(false) == true {
 			// Config changed, and possibly did so before all current metadata was processed.
@@ -217,7 +242,7 @@ func getImageList(processedImages collector.ImageSet) (e error) {
 	for _, str := range strings.Split(string(data), "\n") {
 		if len(str) != 0 {
 			blog.Debug("Previous image: %s", str)
-			processedImages[collector.ImageIDType(str)] = true
+			processedImages.Insert(collector.ImageIDType(str))
 		}
 	}
 	return
@@ -233,6 +258,48 @@ func persistImageList(collectedImages collector.ImageSet) (e error) {
 	defer f.Close()
 	for image := range collectedImages {
 		_, e = f.WriteString(string(image) + "\n")
+		if e != nil {
+			return
+		}
+	}
+	return
+}
+
+// getImageManifestHashList reads the list of previously processed images (manifest hash) from the imageList_ManifestHash file.
+func getImageManifestHashList(processedImagesManifestHash collector.ImageSet) (e error) {
+	filename := *imageList + "_ManifestHash"
+	f, e := os.Open(filename)
+	if e != nil {
+		except.Warn(e, ": Error in opening", filename, ": perhaps a fresh start?")
+		return
+	}
+	defer f.Close()
+	r := bufio.NewReader(f)
+	data, e := ioutil.ReadAll(r)
+	if e != nil {
+		except.Error(e, ": Error in reading file ", filename)
+		return
+	}
+	for _, str := range strings.Split(string(data), "\n") {
+		if len(str) != 0 {
+			blog.Debug("Previous image: %s", str)
+			processedImagesManifestHash.Insert(collector.ImageIDType(str))
+		}
+	}
+	return
+}
+
+// persistImageManifestHashList saves the set of processed image manifest hashes to the imageList_ManifestHash file.
+func persistImageManifestHashList(collectedImagesManifestHash collector.ImageSet) (e error) {
+	var f *os.File
+	filename := *imageList + "_ManifestHash"
+	f, e = os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if e != nil {
+		return
+	}
+	defer f.Close()
+	for manifestHash := range collectedImagesManifestHash {
+		_, e = f.WriteString(string(manifestHash) + "\n")
 		if e != nil {
 			return
 		}
@@ -384,6 +451,7 @@ func main() {
 	if e != nil {
 		blog.Info("Fresh start: No previously collected images were found in %s", *imageList)
 	}
+	_ = getImageManifestHashList(processedImages)
 	blog.Debug(processedImages)
 
 	// Main infinite loop.

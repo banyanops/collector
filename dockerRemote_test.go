@@ -3,6 +3,8 @@ package collector
 import (
 	"fmt"
 	"testing"
+
+	config "github.com/banyanops/collector/config"
 )
 
 func TestListDanglingImages(t *testing.T) {
@@ -27,16 +29,16 @@ func TestRemoveImageByID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	RegistrySpec = "index.docker.io"
+	RegistrySpec = config.DockerHub
 	RegistryAPIURL, HubAPI, BasicAuth, XRegistryAuth = GetRegistryURL()
 	metadata := ImageMetadataInfo{
 		Repo: "banyanops/nginx",
 		Tag:  "1.7",
 	}
 	fmt.Println("TestPullImage %v", metadata)
-	PullImage(metadata)
+	PullImage(&metadata)
 
-	id := "02a791aafe15"
+	id := "bb65d19fc17c"
 	resp, err := RemoveImageByID(ImageIDType(id))
 	if err != nil {
 		t.Fatal(err)

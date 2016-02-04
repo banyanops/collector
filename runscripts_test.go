@@ -39,7 +39,7 @@ func TestBashScriptRun(t *testing.T) {
 		Tag:  "latest",
 	}
 	fmt.Println("TestPullImage %v", metadata)
-	PullImage(metadata)
+	PullImage(&metadata)
 
 	PWD := os.Getenv("PWD")
 	os.Setenv("BANYAN_HOST_DIR", PWD+"/banyandir")

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	config "github.com/banyanops/collector/config"
 	except "github.com/banyanops/collector/except"
 	gcr "github.com/banyanops/collector/gcr"
 	flag "github.com/docker/docker/pkg/mflag"
@@ -26,10 +27,10 @@ var (
 		"Set to false if registry does not need HTTPS (SSL/TLS)")
 	AuthRegistry = flag.Bool([]string{"-registryauth"}, true,
 		"Set to false if registry does not need authentication")
-	RegistryProto = flag.String([]string{"-registryproto"}, "v1",
+	RegistryProto = flag.String([]string{"-registryproto"}, "v2",
 		"Select the registry protocol to use: v1, v2, quay")
-	RegistryTokenAuth = flag.Bool([]string{"-registrytokenauth"}, false,
-		"Registry uses v1 Token Auth, e.g., Docker Hub, Google Container Registry")
+	RegistryTokenAuthV1 = flag.Bool([]string{"#-registrytokenauthv1"}, false,
+		"Registry uses v1 Token Auth, e.g., original v1 Docker Hub")
 	RegistryTLSNoVerify = flag.Bool([]string{"-registrytlsnoverify"}, false,
 		"True to trust the registry without verifying certificate")
 	GCEMetadata = flag.Bool([]string{"-gce-metadata"}, false,
@@ -79,15 +80,9 @@ func GetRegistryURL() (URL string, hubAPI bool, BasicAuth string, XRegistryAuth 
 		} else {
 			URL = "https://" + RegistrySpec
 		}
-		if *RegistryTokenAuth == true {
+		if *RegistryTokenAuthV1 == true {
+			// only for original Docker Hub registry, due to be phased out soon.
 			hubAPI = true
-		}
-		if strings.Contains(URL, "docker.io") || strings.Contains(URL, "gcr.io") {
-			hubAPI = true
-			if *RegistryTokenAuth == false {
-				except.Warn("Forcing --registrytokenauth=true, as required for Docker Hub and Google Container Registry")
-				*RegistryTokenAuth = true
-			}
 		}
 	}
 	return
@@ -155,7 +150,12 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 		return
 	}
 	for r, d := range das {
-		if r == registry || r == "https://"+registry || r == "https://"+registry+"/v1/" {
+		if r == registry || r == "https://"+registry || r == "https://"+registry+"/v1/" ||
+			(strings.Contains(r, "docker.io") && strings.Contains(registry, "docker.io")) {
+			if strings.Contains(registry, "docker.io") {
+				// force use default v2 registry for Docker Hub, ugh.
+				registry = config.DockerHub
+			}
 			encData, err := base64.StdEncoding.DecodeString(d.Auth)
 			if err != nil {
 				except.Error(err, ": error")

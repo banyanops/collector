@@ -12,6 +12,7 @@ import (
 const (
 	// Time to wait before retrying a failed operation.
 	RETRYDURATION = time.Duration(5) * time.Second
+	DockerHub     = "registry-1.docker.io"
 )
 
 var (

@@ -4,7 +4,9 @@ package collector
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -46,7 +48,9 @@ func NewImageSet() ImageSet {
 }
 
 func (is ImageSet) Insert(imageID ImageIDType) {
-	is[imageID] = true
+	if len(imageID) > 0 {
+		is[imageID] = true
+	}
 }
 
 func (is ImageSet) Exists(imageID ImageIDType) bool {
@@ -63,15 +67,16 @@ type IndexInfo struct {
 
 // ImageMetadataInfo records basic information about an image.
 type ImageMetadataInfo struct {
-	Image    string    //this has to be the first field (used in order by)
-	Datetime time.Time //created at
-	Repo     string
-	Tag      string
-	Size     uint64
-	Author   string
-	Checksum string
-	Comment  string
-	Parent   string
+	Image        string    //this has to be the first field (used in order by)
+	Datetime     time.Time //created at
+	Repo         string
+	Tag          string
+	Size         uint64
+	Author       string
+	Checksum     string
+	Comment      string
+	Parent       string
+	ManifestHash string // we calculate a sha256 hex of JSON image manifest returned by a v2 registry
 }
 
 // MetadataSet is a set of Image Metadata Info structures.
@@ -93,12 +98,43 @@ func (m MetadataSet) Insert(metadata ImageMetadataInfo) {
 // Exists returns true if the metadata entry is in the MetadataSet.
 func (m MetadataSet) Exists(metadata ImageMetadataInfo) bool {
 	_, ok := m[metadata]
-	return ok
+	if ok {
+		return true
+	}
+	// No exact match, so search all items in the set for a Repo+Tag+ManifestHash match
+	for item, _ := range m {
+		if len(item.ManifestHash) > 0 {
+			if item.Repo == metadata.Repo && item.Tag == metadata.Tag &&
+				item.ManifestHash == metadata.ManifestHash {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Delete removes the metadata entry from the MetadataSet.
 func (m MetadataSet) Delete(metadata ImageMetadataInfo) {
-	delete(m, metadata)
+	_, ok := m[metadata]
+	if ok {
+		delete(m, metadata)
+		return
+	}
+	for item, _ := range m {
+		if len(item.ManifestHash) > 0 {
+			if item.Repo == metadata.Repo && item.Tag == metadata.Tag &&
+				item.ManifestHash == metadata.ManifestHash {
+				delete(m, item)
+				return
+			}
+		}
+	}
+}
+
+// Replace removes matching metadata entry and replaces it with the updated version
+func (m MetadataSet) Replace(metadata ImageMetadataInfo) {
+	m.Delete(metadata)
+	m.Insert(metadata)
 }
 
 // NewImageToMetadataMap is a constructor for ImageToMetadataMap.
@@ -367,7 +403,7 @@ func GetLocalImageMetadata(oldMetadataSet MetadataSet) (metadataSlice []ImageMet
 
 		blog.Info("Get Image Metadata from local Docker daemon")
 		// Get image metadata
-		metadataSlice, e = GetImageMetadataSpecified(imageMap, oldMetadataSet)
+		metadataSlice, e = GetImageMetadataSpecifiedV1(imageMap, oldMetadataSet)
 		if e != nil {
 			except.Warn(e, " GetImageMetadata")
 			except.Warn("Retrying")
@@ -380,12 +416,13 @@ func GetLocalImageMetadata(oldMetadataSet MetadataSet) (metadataSlice []ImageMet
 }
 
 // GetImageMetadata determines which image metadata is of interest and then calls
-// GetImageMetadataSpecified to obtain and return the appropriate metadata,
-// queried from a Docker registry or Docker daemon.
+// either GetImageMetadataSpecifiedV1 or v1GetTagsMetadata to obtain and return the appropriate metadata,
+// depending on whether the info needs to come from a local Docker daemon or a V1 or V2 Docker registry.
 // If the user has specified the repositories to examine, then no other repositories are examined.
 // If the user has not specified repositories, then the registry search API is used to
 // get the list of all repositories in the registry.
-func GetImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataSlice []ImageMetadataInfo) {
+func GetImageMetadata(oldMetadataSet MetadataSet) (metadataSlice []ImageMetadataInfo) {
+	tagSlice := []TagInfo{}
 	for {
 		blog.Info("Get Repos")
 		repoSlice, e := getRepos()
@@ -433,9 +470,9 @@ func GetImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataS
 
 			blog.Info("Get Image Metadata")
 			// Get image metadata
-			metadataSlice, e = GetImageMetadataSpecified(imageMap, oldMetadataSet)
+			metadataSlice, e = GetImageMetadataSpecifiedV1(imageMap, oldMetadataSet)
 			if e != nil {
-				except.Warn(e, " GetImageMetadataSpecified")
+				except.Warn(e, " GetImageMetadataSpecifiedV1")
 				except.Warn("Retrying")
 				time.Sleep(config.RETRYDURATION)
 				continue
@@ -444,7 +481,7 @@ func GetImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo, metadataS
 		}
 		if *RegistryProto == "v2" {
 			blog.Info("Get Tags and Metadata")
-			tagSlice, metadataSlice, e = v2GetTagsMetadata(repoSlice)
+			metadataSlice, e = v2GetTagsMetadata(repoSlice)
 			if e != nil {
 				except.Warn(e)
 				except.Warn("Retrying")
@@ -561,7 +598,7 @@ func GetImageMetadataTokenAuthV1(oldMetadataSet MetadataSet) (tagSlice []TagInfo
 
 // registrySearchV1 queries the Docker registry, returning a slice of repos.
 func registrySearchV1(client *http.Client, searchTerm string) (repoSlice []RepoType, err error) {
-	response, err := RegistryQuery(client, RegistryAPIURL+"/v1/search?q="+searchTerm)
+	response, err := RegistryQueryV1(client, RegistryAPIURL+"/v1/search?q="+searchTerm)
 	if err != nil {
 		except.Error(err)
 		if s, ok := err.(*HTTPStatusCodeError); ok {
@@ -664,7 +701,7 @@ func v1GetTags(repoSlice []RepoType) (tagSlice []TagInfo, e error) {
 	for _, repo := range repoSlice {
 		// get tags for one repo
 		var response []byte
-		response, e = RegistryQuery(client, RegistryAPIURL+"/v1/repositories/"+string(repo)+"/tags")
+		response, e = RegistryQueryV1(client, RegistryAPIURL+"/v1/repositories/"+string(repo)+"/tags")
 		if e != nil {
 			except.Error(e)
 			if s, ok := e.(*HTTPStatusCodeError); ok {
@@ -694,12 +731,22 @@ type V2Tag struct {
 type V1Compat struct {
 	V1Compatibility string
 }
-type V2Manifest struct {
-	History []V1Compat
+type V2Schema1FSLayer struct {
+	BlobSum string
+}
+type ManifestV2Schema1 struct {
+	SchemaVersion int
+	Name          string
+	Tag           string
+	Architecture  string
+	FsLayers      []V2Schema1FSLayer
+	History       []V1Compat
+	// Ignoring the signatures for now, sorry...
+	// Signatures    []string
 }
 
 func v2GetMetadata(client *http.Client, repo, tag string) (metadata ImageMetadataInfo, e error) {
-	response, err := RegistryQuery(client, RegistryAPIURL+"/v2/"+repo+"/manifests/"+tag)
+	response, err := RegistryQueryV2(client, RegistryAPIURL+"/v2/"+repo+"/manifests/"+tag)
 	if err != nil {
 		except.Error(err)
 		if s, ok := err.(*HTTPStatusCodeError); ok {
@@ -708,10 +755,29 @@ func v2GetMetadata(client *http.Client, repo, tag string) (metadata ImageMetadat
 		}
 		return
 	}
-	//parse JSON output
-	var m V2Manifest
+
+	metadata.Repo = repo
+	metadata.Tag = tag
+	metadata.Image = ""
+	// Recent versions of Docker daemon (1.8.3+?) have complex code that calculates
+	// the image ID from the V2 manifest.
+	// This seems to be in flux as Docker moves toward content-addressable images in 1.10+,
+	// and as the registry image manifest schema itself is still evolving.
+	// As a temporary measure until Docker converges to a more stable state, collector
+	// will calculate its own hash over the V2 manifest and use the calculated
+	// value to try to filter out images that have previously been processed.
+	// The Docker-calculated image ID will get added to the metadata struct
+	// after the image is pulled.
+	sum := sha256.Sum256(response)
+	metadata.ManifestHash = hex.EncodeToString(sum[:])
+	var m ManifestV2Schema1
 	b := bytes.NewBuffer(response)
 	if e = json.NewDecoder(b).Decode(&m); e != nil {
+		blog.Warn("Failed to parse manifest")
+		return
+	}
+	if m.SchemaVersion != 1 {
+		blog.Warn("Manifest schema version %d is not yet supported\n", m.SchemaVersion)
 		return
 	}
 	if len(m.History) == 0 {
@@ -720,16 +786,15 @@ func v2GetMetadata(client *http.Client, repo, tag string) (metadata ImageMetadat
 	}
 	var image ImageStruct
 	if e = json.Unmarshal([]byte(m.History[0].V1Compatibility), &image); e != nil {
+		blog.Warn("Failed to parse ImageStruct")
 		return
 	}
 	var creationTime time.Time
-	metadata.Image = image.ID
 	if creationTime, e = time.Parse(time.RFC3339Nano, image.Created); e != nil {
+		blog.Warn("Failed to parse creation time")
 		return
 	}
 	metadata.Datetime = creationTime
-	metadata.Repo = repo
-	metadata.Tag = tag
 	metadata.Size = image.Size
 	metadata.Author = image.Author
 	metadata.Checksum = image.Checksum
@@ -805,7 +870,7 @@ func getMetadataTokenAuthV1(repotag TagInfo, metadataMap ImageToMetadataMap, cli
 	return
 }
 
-// RegistryRequestWithToken queries a Docker Registry that uses v1 Token Auth, e.g., Docker Hub.
+// RegistryRequestWithToken queries a Docker Registry that uses v1 Token Auth, e.g., Docker Hub V1.
 func RegistryRequestWithToken(client *http.Client, URL string, dockerToken string) (response []byte, e error) {
 	var req *http.Request
 	req, e = http.NewRequest("GET", URL, nil)
@@ -892,24 +957,15 @@ func lookupMetadataTokenAuthV1(imageID ImageIDType, client *http.Client, indexIn
 // GetNewImageMetadata takes the set of existing images, queries the registry to find any changes,
 // and then brings the Output Writer up to date by telling it the obsolete metadata to delete
 // and the new metadata to add.
-func GetNewImageMetadata(oldMetadataSet MetadataSet) (tagSlice []TagInfo,
-	metadataSlice []ImageMetadataInfo, currentMetadataSet MetadataSet) {
+func GetNewImageMetadata(oldMetadataSet MetadataSet) (metadataSlice []ImageMetadataInfo, currentMetadataSet MetadataSet) {
 
 	var currentMetadataSlice []ImageMetadataInfo
 	//config.BanyanUpdate("Loading Registry Metadata")
 	if LocalHost == true {
 		blog.Info("Collect images from local Docker host")
 		currentMetadataSlice = GetLocalImageMetadata(oldMetadataSet)
-		// there is no tag API under Docker Remote API,
-		// and the caller of GetNewImageMetadata ignores tagSlice
-		tagSlice = nil
 	} else {
-		switch {
-		case HubAPI == false:
-			tagSlice, currentMetadataSlice = GetImageMetadata(oldMetadataSet)
-		case HubAPI == true:
-			tagSlice, currentMetadataSlice = GetImageMetadataTokenAuthV1(oldMetadataSet)
-		}
+		currentMetadataSlice = GetImageMetadata(oldMetadataSet)
 	}
 
 	// get only the new metadata from currentMetadataSlice
@@ -980,7 +1036,7 @@ func RemoveObsoleteMetadata(obsolete []ImageMetadataInfo) {
 	return
 }
 
-func v2GetTagsMetadata(repoSlice []RepoType) (tagSlice []TagInfo, metadataSlice []ImageMetadataInfo, e error) {
+func v2GetTagsMetadata(repoSlice []RepoType) (metadataSlice []ImageMetadataInfo, e error) {
 	var client *http.Client
 	if *RegistryTLSNoVerify {
 		tr := &http.Transport{
@@ -992,7 +1048,7 @@ func v2GetTagsMetadata(repoSlice []RepoType) (tagSlice []TagInfo, metadataSlice 
 	}
 	for _, repo := range repoSlice {
 		// get tags for one repo
-		response, err := RegistryQuery(client, RegistryAPIURL+"/v2/"+string(repo)+"/tags/list")
+		response, err := RegistryQueryV2(client, RegistryAPIURL+"/v2/"+string(repo)+"/tags/list")
 		if err != nil {
 			except.Error(err)
 			if s, ok := err.(*HTTPStatusCodeError); ok {
@@ -1006,24 +1062,24 @@ func v2GetTagsMetadata(repoSlice []RepoType) (tagSlice []TagInfo, metadataSlice 
 		if e = json.Unmarshal(response, &m); e != nil {
 			return
 		}
-		t := TagInfo{Repo: repo, TagMap: make(map[TagType]ImageIDType)}
+		// t := TagInfo{Repo: repo, TagMap: make(map[TagType]ImageIDType)}
 		for _, tag := range m.Tags {
 			metadata, e := v2GetMetadata(client, string(repo), tag)
 			if e != nil {
 				except.Error(e, ":Unable to get metadata for repo", string(repo), "tag", tag)
 				continue
 			}
-			t.TagMap[TagType(tag)] = ImageIDType(metadata.Image)
+			// t.TagMap[TagType(tag)] = ImageIDType(metadata.Image)
 			metadataSlice = append(metadataSlice, metadata)
 		}
-		tagSlice = append(tagSlice, t)
+		// tagSlice = append(tagSlice, t)
 	}
 	return
 }
 
-// GetImageMetadataSpecified queries the Docker registry for info about each image
-// specified in the imageMap argument.
-func GetImageMetadataSpecified(imageMap map[ImageIDType][]RepoTagType,
+// GetImageMetadataSpecified queries the local host, if LocalHost=true, or else a
+// Docker V1 registry for info about each image specified in the imageMap argument.
+func GetImageMetadataSpecifiedV1(imageMap map[ImageIDType][]RepoTagType,
 	oldMetadataSet MetadataSet) (metadataSlice []ImageMetadataInfo, e error) {
 
 	metadataMap := NewImageToMetadataMap(oldMetadataSet)
@@ -1079,7 +1135,7 @@ func GetImageMetadataSpecified(imageMap map[ImageIDType][]RepoTagType,
 					ch <- metadata
 					return
 				}
-				response, e = RegistryQuery(client, RegistryAPIURL+"/v1/images/"+string(imageID)+"/json")
+				response, e = RegistryQueryV1(client, RegistryAPIURL+"/v1/images/"+string(imageID)+"/json")
 			}
 			if e != nil {
 				errch <- e
@@ -1152,8 +1208,18 @@ func SaveImageMetadata(metadataSlice []ImageMetadataInfo) {
 
 	config.BanyanUpdate("Save Image Metadata", statusMessageMD(metadataSlice))
 
+	slice := []ImageMetadataInfo{}
+	for _, metadata := range metadataSlice {
+		if len(metadata.Image) > 0 {
+			slice = append(slice, metadata)
+		}
+	}
+	if len(slice) == 0 {
+		return
+	}
+
 	for _, writer := range WriterList {
-		writer.AppendImageMetadata(metadataSlice)
+		writer.AppendImageMetadata(slice)
 	}
 
 	return

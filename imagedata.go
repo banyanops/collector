@@ -3,6 +3,7 @@
 package collector
 
 import (
+	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"net/http"
@@ -24,9 +25,17 @@ type ImageDataInfo struct {
 	Architecture string
 }
 
+// Registry V2 authorization server result
+type authServerResult struct {
+	Token string `json:"token"`
+}
+
 // PullImage performs a docker pull on an image specified by repo/tag.
-func PullImage(metadata ImageMetadataInfo) (err error) {
-	tagspec := RegistrySpec + "/" + metadata.Repo + ":" + metadata.Tag
+func PullImage(metadata *ImageMetadataInfo) (err error) {
+	tagspec := metadata.Repo + ":" + metadata.Tag
+	if RegistrySpec != config.DockerHub {
+		tagspec = RegistrySpec + "/" + tagspec
+	}
 	apipath := "/images/create?fromImage=" + tagspec
 	blog.Info("PullImage downloading %s, Image ID: %s", apipath, metadata.Image)
 	config.BanyanUpdate("Pull", apipath, metadata.Image)
@@ -36,38 +45,57 @@ func PullImage(metadata ImageMetadataInfo) (err error) {
 		return
 	}
 	if strings.Contains(string(resp), `"error":`) {
-		except.Error("PullImage error for %s/%s/%s", RegistrySpec, metadata.Repo, metadata.Tag)
 		err = errors.New("PullImage error for " + RegistrySpec + "/" + metadata.Repo + "/" + metadata.Tag)
+		except.Error(err)
+		return
 	}
 	blog.Trace(string(resp))
 
-	if metadata.Image > "" {
-		// verify the image ID of the pulled image matches the expected metadata.
-		imageMap, err := GetLocalImages(false, false)
-		if err != nil {
-			except.Error(err, ": PullImage unable to list local images")
-		}
-	OUTERLOOP:
-		for imageID, repotagSlice := range imageMap {
-			for _, repotag := range repotagSlice {
-				if string(repotag.Repo) == metadata.Repo && string(repotag.Tag) == metadata.Tag {
-					if string(imageID) == metadata.Image {
-						// image IDs match, we're all good.
-						break OUTERLOOP
-					}
-					// image ID doesn't match. Remove the image and return an error.
-					newMetadata := metadata
-					newMetadata.Image = string(imageID)
-					RemoveImages([]ImageMetadataInfo{newMetadata})
-					err = errors.New("PullImage " + metadata.Repo + ":" + metadata.Tag +
-						" image ID " + string(imageID) + " doesn't match metadata-derived ID " +
-						metadata.Image)
-					except.Error(err)
-					return err
-				}
+	// get the Docker-calculated image ID
+	calculatedID, err := dockerImageID(RegistrySpec, metadata)
+	if err != nil {
+		except.Error(err, "dockerImageID")
+		return
+	}
+	if metadata.Image > "" && metadata.Image != calculatedID {
+		newMetadata := *metadata
+		newMetadata.Image = calculatedID
+		RemoveImages([]ImageMetadataInfo{newMetadata})
+		err = errors.New("PullImage " + metadata.Repo + ":" + metadata.Tag +
+			" image ID " + calculatedID + " doesn't match metadata-derived ID " +
+			metadata.Image)
+		except.Error(err)
+		return err
+	}
+	metadata.Image = calculatedID
+	return
+}
+
+func dockerImageID(regspec string, metadata *ImageMetadataInfo) (ID string, err error) {
+	matchRepo := string(metadata.Repo)
+	if regspec != config.DockerHub {
+		matchRepo = regspec + "/" + matchRepo
+	}
+	matchTag := string(metadata.Tag)
+	if strings.HasPrefix(matchRepo, "library/") {
+		matchRepo = strings.Replace(matchRepo, "library/", "", 1)
+	}
+	// verify the image ID of the pulled image matches the expected metadata.
+	imageMap, err := GetLocalImages(false, false)
+	if err != nil {
+		except.Error(err, ":unable to list local images")
+		return
+	}
+	for imageID, repotagSlice := range imageMap {
+		for _, repotag := range repotagSlice {
+			if string(repotag.Repo) == matchRepo && string(repotag.Tag) == matchTag {
+				ID = string(imageID)
+				return
 			}
 		}
 	}
+	err = errors.New("Failed to find local image ID for " + metadata.Repo + ":" + metadata.Tag)
+	except.Error(err)
 	return
 }
 
@@ -156,8 +184,8 @@ func (s *HTTPStatusCodeError) Error() string {
 	return "HTTP Status Code " + strconv.Itoa(s.StatusCode)
 }
 
-// RegistryQuery performs an HTTP GET operation from the registry and returns the response.
-func RegistryQuery(client *http.Client, URL string) (response []byte, e error) {
+// RegistryQueryV1 performs an HTTP GET operation from a V1 registry and returns the response.
+func RegistryQueryV1(client *http.Client, URL string) (response []byte, e error) {
 	_, _, BasicAuth, XRegistryAuth = GetRegistryURL()
 	req, e := http.NewRequest("GET", URL, nil)
 	if e != nil {
@@ -178,6 +206,138 @@ func RegistryQuery(client *http.Client, URL string) (response []byte, e error) {
 	response, e = ioutil.ReadAll(r.Body)
 	if e != nil {
 		return
+	}
+	return
+}
+
+// RegistryQueryV2 performs an HTTP GET operation from the registry and returns the response.
+// If the initial response code is 401 Unauthorized, then this function issues a call
+// if indicated by an WWW-Authenticate header in the response to get a token, and
+// then re-issues the initial call to get the final response.
+func RegistryQueryV2(client *http.Client, URL string) (response []byte, e error) {
+	_, _, BasicAuth, XRegistryAuth = GetRegistryURL()
+	req, e := http.NewRequest("GET", URL, nil)
+	if e != nil {
+		return nil, e
+	}
+	req.Header.Set("Authorization", "Basic "+BasicAuth)
+	r, e := client.Do(req)
+	if e != nil {
+		return nil, e
+	}
+	if r.StatusCode == 401 {
+		blog.Debug("Registry Query %s got 401", URL)
+		// get the WWW-Authenticate header
+		WWWAuth := r.Header.Get("WWW-Authenticate")
+		if WWWAuth == "" {
+			except.Error("Empty WWW-Authenticate", URL)
+			return
+		}
+		arr := strings.Fields(WWWAuth)
+		if len(arr) != 2 {
+			e = errors.New("Invalid WWW-Authenticate format for " + WWWAuth)
+			except.Error(e)
+			return
+		}
+		authType := arr[0]
+		blog.Debug("Authorization type: %s", authType)
+		fieldMap := make(map[string]string)
+		e = parseAuthenticateFields(arr[1], fieldMap)
+		if e != nil {
+			except.Error(e)
+			return
+		}
+		r.Body.Close()
+		// access the authentication server to get a token
+		token, err := queryAuthServerV2(client, fieldMap, BasicAuth)
+		if err != nil {
+			except.Error(err)
+			return nil, err
+		}
+		// re-issue the original request, this time using the token
+		req, e = http.NewRequest("GET", URL, nil)
+		if e != nil {
+			return nil, e
+		}
+		req.Header.Set("Authorization", authType+" "+token)
+		r, e = client.Do(req)
+		if e != nil {
+			return nil, e
+		}
+	}
+	defer r.Body.Close()
+	if r.StatusCode < 200 || r.StatusCode > 299 {
+		e = &HTTPStatusCodeError{StatusCode: r.StatusCode}
+		return
+	}
+	response, e = ioutil.ReadAll(r.Body)
+	if e != nil {
+		return
+	}
+	return
+}
+
+/* queryAuthServerV2 retrieves an authorization token from a V2 auth server */
+func queryAuthServerV2(client *http.Client, fieldMap map[string]string, BasicAuth string) (token string, e error) {
+	authServer := fieldMap["realm"]
+	if authServer == "" {
+		e = errors.New("No registry token auth server specified")
+		return
+	}
+	blog.Debug("authServer=%s\n", authServer)
+	URL := authServer
+	first := true
+	for key, value := range fieldMap {
+		if key != "realm" {
+			if first {
+				URL = URL + "?"
+				first = false
+			} else {
+				URL = URL + "&"
+			}
+			URL = URL + key + "=" + value
+		}
+	}
+	blog.Debug("Auth server URL is %s", URL)
+
+	req, e := http.NewRequest("GET", URL, nil)
+	if e != nil {
+		return
+	}
+	req.Header.Set("Authorization", "Basic "+BasicAuth)
+	r, e := client.Do(req)
+	if e != nil {
+		return
+	}
+	defer r.Body.Close()
+	if r.StatusCode < 200 || r.StatusCode > 299 {
+		e = &HTTPStatusCodeError{StatusCode: r.StatusCode}
+		return
+	}
+	response, e := ioutil.ReadAll(r.Body)
+	if e != nil {
+		return
+	}
+	var parsedReply authServerResult
+	e = json.Unmarshal(response, &parsedReply)
+	if e != nil {
+		return
+	}
+	token = parsedReply.Token
+	return token, e
+}
+
+func parseAuthenticateFields(s string, fieldMap map[string]string) (e error) {
+	fields := strings.Split(s, ",")
+	for _, f := range fields {
+		arr := strings.Split(f, "=")
+		if len(arr) != 2 {
+			e = errors.New("Invalid WWW-Auth field format for " + f)
+			return
+		}
+		key := arr[0]
+		value := strings.Replace(arr[1], `"`, "", -1)
+		fieldMap[key] = value
 	}
 	return
 }

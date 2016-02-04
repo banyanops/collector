@@ -28,7 +28,7 @@ func doFlags() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "  Usage: %s [OPTIONS] REGISTRY REPO [REPO...]\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "\n  REGISTRY:\n")
-		fmt.Fprintf(os.Stderr, "\tURL of your Docker registry; use index.docker.io for Docker Hub, use local.host to collect images from local Docker host\n")
+		fmt.Fprintf(os.Stderr, "\tURL of your Docker registry; use "+config.DockerHub+" for Docker Hub, use local.host to collect images from local Docker host\n")
 		fmt.Fprintf(os.Stderr, "\n  REPO:\n")
 		fmt.Fprintf(os.Stderr, "\tOne or more repos to gather info about; if no repo is specified Collector will gather info on *all* repos in the Registry\n")
 		fmt.Fprintf(os.Stderr, "\n  Environment variables:\n")
@@ -74,15 +74,16 @@ func printExampleUsage() {
 	fmt.Fprintf(os.Stderr, "\n  Examples:\n")
 	fmt.Fprintf(os.Stderr, "  (a) Running when compiled from source (standalone mode):\n")
 	fmt.Fprintf(os.Stderr, "  \tcd <COLLECTOR_SOURCE_DIR>\n")
-	fmt.Fprintf(os.Stderr, "  \tsudo COLLECTOR_DIR=$PWD $GOPATH/bin/collector index.docker.io banyanops/nginx\n\n")
+	fmt.Fprintf(os.Stderr, "  \tsudo COLLECTOR_DIR=$PWD $GOPATH/bin/collector "+config.DockerHub+" banyanops/nginx\n\n")
 	fmt.Fprintf(os.Stderr, "  (b) Running inside a Docker container: \n")
 	fmt.Fprintf(os.Stderr, "  \tsudo docker run --rm \\ \n")
+	fmt.Fprintf(os.Stderr, "  \t\t-v ~/.docker:/root/.docker \\ \n")
 	fmt.Fprintf(os.Stderr, "  \t\t-v ~/.dockercfg:/root/.dockercfg \\ \n")
 	fmt.Fprintf(os.Stderr, "  \t\t-v /var/run/docker.sock:/var/run/docker.sock \\ \n")
 	fmt.Fprintf(os.Stderr, "  \t\t-v $HOME/.banyan:/banyandir \\ \n")
 	fmt.Fprintf(os.Stderr, "  \t\t-v <USER_SCRIPTS_DIR>:/banyancollector/data/userscripts \\ \n")
 	fmt.Fprintf(os.Stderr, "  \t\t-e BANYAN_HOST_DIR=$HOME/.banyan \\ \n")
-	fmt.Fprintf(os.Stderr, "  \t\tbanyanops/collector index.docker.io banyanops/nginx\n\n")
+	fmt.Fprintf(os.Stderr, "  \t\tbanyanops/collector "+config.DockerHub+" banyanops/nginx\n\n")
 }
 
 func SetOutputWriters(authToken string) {

@@ -2,7 +2,10 @@ package collector
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
+
+	config "github.com/banyanops/collector/config"
 )
 
 func TestGetLocalImageMetadata(t *testing.T) {
@@ -13,14 +16,14 @@ func TestGetLocalImageMetadata(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	RegistrySpec = "index.docker.io"
+	RegistrySpec = config.DockerHub
 	RegistryAPIURL, HubAPI, BasicAuth, XRegistryAuth = GetRegistryURL()
 	metadata := ImageMetadataInfo{
 		Repo: "fedora",
 		Tag:  "latest",
 	}
 	fmt.Println("TestPullImage %v", metadata)
-	PullImage(metadata)
+	PullImage(&metadata)
 
 	var currentMetadataSlice []ImageMetadataInfo
 	MetadataSet := NewMetadataSet()
@@ -52,4 +55,22 @@ func TestValidRepoName(t *testing.T) {
 			t.Fatalf("TestValidRepoName ValidRepoName(%s) did not return %v", repo, expected)
 		}
 	}
+}
+
+func TestRegistryQuery(t *testing.T) {
+	var e error
+	DockerTransport, e = NewDockerTransport(DOCKERPROTO, DOCKERADDR)
+	if e != nil {
+		t.Fatal(e)
+	}
+	RegistrySpec = config.DockerHub
+	RegistryAPIURL, HubAPI, BasicAuth, XRegistryAuth = GetRegistryURL()
+	fmt.Printf("RegistryAPIURL %s HubAPI %v BasicAuth %s XRegistryAuth %s\n", RegistryAPIURL, HubAPI, BasicAuth, XRegistryAuth)
+	*RegistryProto = "v2"
+	client := &http.Client{}
+	r, e := RegistryQueryV2(client, "https://"+RegistrySpec+"/v2/banyanops/collector/tags/list")
+	if e != nil {
+		t.Fatal(e)
+	}
+	fmt.Println(string(r))
 }

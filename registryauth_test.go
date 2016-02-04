@@ -10,6 +10,11 @@ import (
 
 func TestRegAuth(t *testing.T) {
 	fmt.Println("TestRegAuth")
+	var e error
+	DockerTransport, e = NewDockerTransport(DOCKERPROTO, DOCKERADDR)
+	if e != nil {
+		t.Fatal(e)
+	}
 	expectedUser, expectedPassword, registry, e := dockerAuth()
 	if e != nil {
 		t.Fatal(e)

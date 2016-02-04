@@ -3,10 +3,11 @@ package collector
 import (
 	"encoding/base64"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 	"testing"
+
+	config "github.com/banyanops/collector/config"
 )
 
 var metadataSlice []ImageMetadataInfo
@@ -23,21 +24,22 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestPullImage(t *testing.T) {
+func TestPullImageOne(t *testing.T) {
 	fmt.Println("TestPullImage")
 	var e error
 	DockerTransport, e = NewDockerTransport(DOCKERPROTO, DOCKERADDR)
 	if e != nil {
 		t.Fatal(e)
 	}
-	RegistrySpec = "index.docker.io"
+	RegistrySpec = config.DockerHub
 	RegistryAPIURL, HubAPI, BasicAuth, XRegistryAuth = GetRegistryURL()
 	metadata := ImageMetadataInfo{
 		Repo: "library/busybox",
 		Tag:  "latest",
 	}
 	fmt.Println("TestPullImage %v", metadata)
-	err := PullImage(metadata)
+	err := PullImage(&metadata)
+	fmt.Printf("final metadata is %#v\n", metadata)
 	if err != nil {
 		t.Fatal(e)
 	}
@@ -51,7 +53,7 @@ func TestPullImageBogusID(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	RegistrySpec = "index.docker.io"
+	RegistrySpec = config.DockerHub
 	RegistryAPIURL, HubAPI, BasicAuth, XRegistryAuth = GetRegistryURL()
 	metadata := ImageMetadataInfo{
 		Repo:  "busybox",
@@ -59,7 +61,7 @@ func TestPullImageBogusID(t *testing.T) {
 		Image: "Bogus",
 	}
 	fmt.Println("TestPullImage %v", metadata)
-	err := PullImage(metadata)
+	err := PullImage(&metadata)
 	if err == nil {
 		t.Fatal("PullImage was supposed to return an error here")
 	}
@@ -72,7 +74,7 @@ func TestPullImageBogusID(t *testing.T) {
 
 func TestRemoveImage(t *testing.T) {
 	fmt.Println("TestRemoveImage")
-	TestPullImage(t)
+	TestPullImageOne(t)
 	metadata1 := ImageMetadataInfo{
 		Repo: "library/busybox",
 		Tag:  "latest",
@@ -94,7 +96,7 @@ func dockerAuth() (user, password, registry string, e error) {
 	password = os.Getenv("DOCKER_PASSWORD")
 	registry = os.Getenv("DOCKER_REGISTRY")
 	if registry == "" {
-		registry = "index.docker.io"
+		registry = config.DockerHub
 	}
 	RegistryAPIURL = "https://" + registry
 	s := user + ":" + password
@@ -107,14 +109,15 @@ func dockerAuth() (user, password, registry string, e error) {
 	return
 }
 
+/* Obsolete V1 token auth test.
 func TestGetReposHub(t *testing.T) {
 	fmt.Println("TestGetReposHub")
 	_, _, registry, e := dockerAuth()
 	if e != nil {
 		t.Fatal(e)
 	}
-	if registry != "index.docker.io" {
-		t.Fatal("TestRegReposHub only works with DOCKER_REGISTRY=index.docker.io")
+	if registry != config.DockerHub {
+		t.Fatal("TestRegReposHub only works with DOCKER_REGISTRY=" + config.DockerHub)
 	}
 	ReposToProcess["library/mysql"] = true
 	//reposToProcess["ncarlier/redis"] = true
@@ -127,40 +130,30 @@ func TestGetReposHub(t *testing.T) {
 	fmt.Print(indexInfo, e)
 	return
 }
+*/
 
 func TestGetTagsMetadataHub(t *testing.T) {
+	var e error
 	fmt.Println("TestGetTagsMetadataHub")
+	DockerTransport, e = NewDockerTransport(DOCKERPROTO, DOCKERADDR)
+	if e != nil {
+		t.Fatal(e)
+	}
+	RegistrySpec = config.DockerHub
 	_, _, registry, e := dockerAuth()
 	if e != nil {
 		t.Fatal(e)
 	}
-	if registry != "index.docker.io" {
-		t.Fatal("TestGetTagsMetadataHub only works with DOCKER_REGISTRY=index.docker.io")
+	if registry != config.DockerHub {
+		t.Fatal("TestGetTagsMetadataHub only works with DOCKER_REGISTRY=" + config.DockerHub)
 	}
 	ReposToProcess["library/iojs"] = true
 	repo := RepoType("library/iojs")
-	client := &http.Client{}
-	indexInfo, e := getReposTokenAuthV1(repo, client)
-	if e != nil {
-		t.Fatal(e)
-	}
-	tagSlice, e := getTagsTokenAuthV1(repo, client, indexInfo)
-	if e != nil {
-		t.Fatal(e)
-	}
-	oldMetadataSet := NewMetadataSet()
-	metadataMap := NewImageToMetadataMap(oldMetadataSet)
-	metadataSlice, e := getMetadataTokenAuthV1(tagSlice[0], metadataMap, client, indexInfo)
-	//tagSlice, metadataSlice, e := getTagsMetadataTokenAuthV1(indexInfo, oldMetadataSet)
-	if e != nil {
-		t.Fatal(e)
-	}
-	if tagSlice == nil || len(tagSlice) == 0 {
-		t.Fatal("tagSlice", tagSlice)
-	}
+	repoSlice := []RepoType{repo}
+	metadataSlice, e = v2GetTagsMetadata(repoSlice)
 	if metadataSlice == nil || len(metadataSlice) == 0 {
 		t.Fatal("metadataSlice", metadataSlice)
 	}
-	fmt.Print(tagSlice)
+	fmt.Printf("metadataSlice len=%d, contents %v\n", len(metadataSlice), metadataSlice)
 	return
 }
