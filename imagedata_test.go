@@ -34,8 +34,10 @@ func TestPullImageOne(t *testing.T) {
 	RegistrySpec = config.DockerHub
 	RegistryAPIURL, HubAPI, BasicAuth, XRegistryAuth = GetRegistryURL()
 	metadata := ImageMetadataInfo{
-		Repo: "library/busybox",
-		Tag:  "latest",
+		OtherMetadata: OtherMetadata{
+			Repo: "library/busybox",
+			Tag:  "latest",
+		},
 	}
 	fmt.Println("TestPullImage %v", metadata)
 	err := PullImage(&metadata)
@@ -56,9 +58,11 @@ func TestPullImageBogusID(t *testing.T) {
 	RegistrySpec = config.DockerHub
 	RegistryAPIURL, HubAPI, BasicAuth, XRegistryAuth = GetRegistryURL()
 	metadata := ImageMetadataInfo{
-		Repo:  "busybox",
-		Tag:   "latest",
 		Image: "Bogus",
+		OtherMetadata: OtherMetadata{
+			Repo: "busybox",
+			Tag:  "latest",
+		},
 	}
 	fmt.Println("TestPullImage %v", metadata)
 	err := PullImage(&metadata)
@@ -76,8 +80,10 @@ func TestRemoveImage(t *testing.T) {
 	fmt.Println("TestRemoveImage")
 	TestPullImageOne(t)
 	metadata1 := ImageMetadataInfo{
-		Repo: "library/busybox",
-		Tag:  "latest",
+		OtherMetadata: OtherMetadata{
+			Repo: "library/busybox",
+			Tag:  "latest",
+		},
 	}
 	/*
 		metadata2 := ImageMetadataInfo{

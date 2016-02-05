@@ -67,16 +67,20 @@ type IndexInfo struct {
 
 // ImageMetadataInfo records basic information about an image.
 type ImageMetadataInfo struct {
-	Image        string    //this has to be the first field (used in order by)
-	Datetime     time.Time //created at
-	Repo         string
-	Tag          string
-	Size         uint64
-	Author       string
-	Checksum     string
-	Comment      string
-	Parent       string
+	Image    string    //this has to be the first field (used in order by)
+	Datetime time.Time //created at
+	OtherMetadata
 	ManifestHash string // we calculate a sha256 hex of JSON image manifest returned by a v2 registry
+}
+
+type OtherMetadata struct {
+	Repo     string
+	Tag      string
+	Size     uint64
+	Author   string
+	Checksum string
+	Comment  string
+	Parent   string
 }
 
 // MetadataSet is a set of Image Metadata Info structures.
@@ -96,21 +100,51 @@ func (m MetadataSet) Insert(metadata ImageMetadataInfo) {
 }
 
 // Exists returns true if the metadata entry is in the MetadataSet.
+// If there's no exact match, then a search is attempted for an
+// entry in the set with non-contradictory values for
+// Image and Metadata Hash (empty values are not
+// considered contradictions) and match in all other fields.
 func (m MetadataSet) Exists(metadata ImageMetadataInfo) bool {
 	_, ok := m[metadata]
 	if ok {
 		return true
 	}
-	// No exact match, so search all items in the set for a Repo+Tag+ManifestHash match
+	// No exact match, so search all items in the set for a Repo+Tag match
+	// without a contradictory ManifestHash or imageID value
+	metadataOther := metadata.OtherMetadata
 	for item, _ := range m {
-		if len(item.ManifestHash) > 0 {
-			if item.Repo == metadata.Repo && item.Tag == metadata.Tag &&
-				item.ManifestHash == metadata.ManifestHash {
-				return true
+		itemOther := item.OtherMetadata
+		if itemOther == metadataOther {
+			time1 := item.Datetime.Truncate(time.Second)
+			time2 := metadata.Datetime.Truncate(time.Second)
+			if !time1.Equal(time2) {
+				continue
 			}
+			contradiction := len(metadata.Image) > 0 && len(item.Image) > 0 &&
+				metadata.Image != item.Image
+			if contradiction {
+				continue
+			}
+			contradiction = len(metadata.ManifestHash) > 0 && len(item.ManifestHash) > 0 &&
+				metadata.ManifestHash != item.ManifestHash
+			if contradiction {
+				continue
+			}
+			// no contradiction for Image or ManifestHash
+			return true
 		}
 	}
 	return false
+}
+
+// SameRepoTag returns metadata entries from MetadataSet with the same repo & tag as metadata.
+func (m MetadataSet) SameRepoTag(metadata ImageMetadataInfo) (matches []ImageMetadataInfo) {
+	for item, _ := range m {
+		if item.Repo == metadata.Repo && item.Tag == metadata.Tag {
+			matches = append(matches, item)
+		}
+	}
+	return
 }
 
 // Delete removes the metadata entry from the MetadataSet.
@@ -972,7 +1006,7 @@ func GetNewImageMetadata(oldMetadataSet MetadataSet) (metadataSlice []ImageMetad
 	currentMetadataSet = NewMetadataSet()
 	for _, metadata := range currentMetadataSlice {
 		currentMetadataSet.Insert(metadata)
-		if _, ok := oldMetadataSet[metadata]; !ok {
+		if oldMetadataSet.Exists(metadata) == false {
 			// metadata is not in old map
 			metadataSlice = append(metadataSlice, metadata)
 		}

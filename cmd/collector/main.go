@@ -57,6 +57,21 @@ func NewRepoSet() RepoSet {
 	return make(map[collector.RepoType]bool)
 }
 
+// updateRepoTagImageID removes obsolete metadata when a pull determines that
+// a new image ID is associated with a repo:tag.
+func updateRepoTagImageID(metadata *collector.ImageMetadataInfo, oldMetadataSet collector.MetadataSet) {
+	matches := oldMetadataSet.SameRepoTag(*metadata)
+	obsolete := []collector.ImageMetadataInfo{}
+	for _, m := range matches {
+		if metadata.Image != m.Image {
+			obsolete = append(obsolete, m)
+		}
+	}
+	if len(obsolete) > 0 {
+		collector.RemoveObsoleteMetadata(obsolete)
+	}
+}
+
 // DoIteration runs one iteration of the main loop to get new images, extract data from them,
 // and saves results.
 func DoIteration(ReposToLimit RepoSet, authToken string,
@@ -152,6 +167,7 @@ func DoIteration(ReposToLimit RepoSet, authToken string,
 					}
 					continue
 				}
+				updateRepoTagImageID(metadata, oldMetadataSet)
 				processedMetadata.Replace(*metadata)
 				if ImageLenBeforePull == 0 && len(metadata.Image) > 0 {
 					// Docker daemon computed the image ID for us, so now we can record this entry.
@@ -394,6 +410,7 @@ func InfLoop(authToken string, processedImages collector.ImageSet) {
 
 	// Image Metadata we have already seen
 	metadataSet := collector.NewMetadataSet()
+	initMetadataSet(authToken, metadataSet)
 	pulledList := []collector.ImageMetadataInfo{}
 
 	for {

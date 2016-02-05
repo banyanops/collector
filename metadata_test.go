@@ -19,8 +19,10 @@ func TestGetLocalImageMetadata(t *testing.T) {
 	RegistrySpec = config.DockerHub
 	RegistryAPIURL, HubAPI, BasicAuth, XRegistryAuth = GetRegistryURL()
 	metadata := ImageMetadataInfo{
-		Repo: "fedora",
-		Tag:  "latest",
+		OtherMetadata: OtherMetadata{
+			Repo: "fedora",
+			Tag:  "latest",
+		},
 	}
 	fmt.Println("TestPullImage %v", metadata)
 	PullImage(&metadata)

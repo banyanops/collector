@@ -32,8 +32,10 @@ func TestRemoveImageByID(t *testing.T) {
 	RegistrySpec = config.DockerHub
 	RegistryAPIURL, HubAPI, BasicAuth, XRegistryAuth = GetRegistryURL()
 	metadata := ImageMetadataInfo{
-		Repo: "banyanops/nginx",
-		Tag:  "1.7",
+		OtherMetadata: OtherMetadata{
+			Repo: "banyanops/nginx",
+			Tag:  "1.7",
+		},
 	}
 	fmt.Println("TestPullImage %v", metadata)
 	PullImage(&metadata)

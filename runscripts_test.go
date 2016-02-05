@@ -35,8 +35,10 @@ func TestBashScriptRun(t *testing.T) {
 	RegistrySpec = "index.docker.io"
 	RegistryAPIURL, HubAPI, BasicAuth, XRegistryAuth = GetRegistryURL()
 	metadata := ImageMetadataInfo{
-		Repo: "ubuntu",
-		Tag:  "latest",
+		OtherMetadata: OtherMetadata{
+			Repo: "ubuntu",
+			Tag:  "latest",
+		},
 	}
 	fmt.Println("TestPullImage %v", metadata)
 	PullImage(&metadata)

@@ -19,6 +19,10 @@ func init() {
 	config.BanyanUpdate = func(status ...string) {}
 }
 
+func initMetadataSet(authToken string, metadataSet collector.MetadataSet) {
+	return
+}
+
 func checkConfigUpdate(initial bool) (updates bool) {
 	return checkRepoList(initial)
 }
