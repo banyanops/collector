@@ -72,6 +72,7 @@ func doFlags() {
 		collector.LocalHost = true
 	}
 	//nextMaxImages = *maxImages
+	config.NetworkDisabled = *networkDisabled
 }
 
 func printExampleUsage() {

@@ -16,7 +16,8 @@ const (
 )
 
 var (
-	FilterRepos = false
+	FilterRepos     = false
+	NetworkDisabled = false
 
 	// Directories/files dependent on Environment variables
 	BANYANHOSTDIR = func() string {

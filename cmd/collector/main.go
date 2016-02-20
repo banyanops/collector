@@ -34,6 +34,7 @@ var (
 		"List of previously collected images (file)")
 	repoList = flag.String([]string{"r", "-repolist"}, config.BANYANDIR()+"/hostcollector/repolist",
 		"File containing list of repos to process")
+	networkDisabled = flag.Bool([]string{"-networkdisabled"}, false, "Disable networking for created containers")
 
 	// Configuration parameters for speed/efficiency
 	removeThresh = flag.Int([]string{"-removethresh"}, 5,

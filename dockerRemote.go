@@ -47,17 +47,18 @@ type HostConfig struct {
 }
 
 type ContainerConfig struct {
-	User         string
-	AttachStdin  bool
-	AttachStdout bool
-	AttachStderr bool
-	Tty          bool
-	Env          []string
-	Cmd          []string
-	Entrypoint   []string
-	Image        string
-	Labels       map[string]string
-	WorkingDir   string
+	User            string
+	AttachStdin     bool
+	AttachStdout    bool
+	AttachStderr    bool
+	Tty             bool
+	Env             []string
+	Cmd             []string
+	Entrypoint      []string
+	Image           string
+	Labels          map[string]string
+	WorkingDir      string
+	NetworkDisabled bool
 }
 
 type Container struct {
@@ -248,6 +249,7 @@ func createCmd(imageID ImageIDType, scriptName, staticBinary, dirPath string) (j
 	container.User = "0"
 	container.AttachStdout = true
 	container.AttachStderr = true
+	container.NetworkDisabled = config.NetworkDisabled
 	container.HostConfig.Binds = []string{config.BANYANHOSTDIR() + "/hosttarget" + ":" + TARGETCONTAINERDIR + ":ro"}
 	container.Image = string(imageID)
 
