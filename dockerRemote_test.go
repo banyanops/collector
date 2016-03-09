@@ -40,10 +40,14 @@ func TestRemoveImageByID(t *testing.T) {
 	fmt.Println("TestPullImage %v", metadata)
 	PullImage(&metadata)
 
-	id := "bb65d19fc17c"
+	id := "d052f9300189"
 	resp, err := RemoveImageByID(ImageIDType(id))
 	if err != nil {
-		t.Fatal(err)
+		id = "bb65d19fc17c"
+		resp, err = RemoveImageByID(ImageIDType(id))
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	fmt.Println(string(resp))
 }
