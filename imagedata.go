@@ -211,9 +211,9 @@ func RegistryQueryV1(client *http.Client, URL string) (response []byte, e error)
 }
 
 // RegistryQueryV2 performs an HTTP GET operation from the registry and returns the response.
-// If the initial response code is 401 Unauthorized, then this function issues a call
-// if indicated by an WWW-Authenticate header in the response to get a token, and
-// then re-issues the initial call to get the final response.
+// If the initial response has status code 401 Unauthorized and includes WWW-Authenticate header,
+// then we follow the directions in that header to get an access token, and finally
+// re-issue the initial call to get the final response.
 func RegistryQueryV2(client *http.Client, URL string) (response []byte, e error) {
 	_, _, BasicAuth, XRegistryAuth = GetRegistryURL()
 	req, e := http.NewRequest("GET", URL, nil)

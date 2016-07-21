@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	except "github.com/banyanops/collector/except"
 	fsutil "github.com/banyanops/collector/fsutil"
@@ -45,10 +46,15 @@ func (f *FileWriter) WriteImageAllData(outMapMap map[string]map[string]interface
 				continue
 			}
 			image := string(imageID)
-			if len(image) < 12 {
+			minLen := 12
+			index := strings.Index(image, ":")
+			if index >= 0 {
+				minLen += index + 1
+			}
+			if len(image) < minLen {
 				except.Warn("Weird...Haven't seen imageIDs so small -- possibly a test?")
 			} else {
-				image = string(imageID)[0:12]
+				image = string(imageID)[0:minLen]
 			}
 			filenamePath := scriptDir + "/" + image
 			if _, ok := out.([]byte); ok {

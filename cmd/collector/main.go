@@ -73,7 +73,7 @@ func updateRepoTagImageID(metadata *collector.ImageMetadataInfo, oldMetadataSet 
 }
 
 // DoIteration runs one iteration of the main loop to get new images, extract data from them,
-// and saves results.
+// and save results.
 func DoIteration(ReposToLimit RepoSet, authToken string,
 	processedImages collector.ImageSet, oldMetadataSet collector.MetadataSet,
 	PulledList []collector.ImageMetadataInfo) (currentMetadataSet collector.MetadataSet,
