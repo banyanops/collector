@@ -39,7 +39,7 @@ func PullImage(metadata *ImageMetadataInfo) (err error) {
 	apipath := "/images/create?fromImage=" + tagspec
 	blog.Info("PullImage downloading %s, Image ID: %s", apipath, metadata.Image)
 	config.BanyanUpdate("Pull", apipath, metadata.Image)
-	resp, err := DockerAPI(DockerTransport, "POST", apipath, []byte{}, XRegistryAuth)
+	resp, err := DockerAPI(DockerClient, "POST", apipath, []byte{}, XRegistryAuth)
 	if err != nil {
 		except.Error(err, "PullImage failed for", RegistrySpec, metadata.Repo, metadata.Tag, metadata.Image)
 		return
@@ -137,7 +137,7 @@ func RemoveImages(PulledImages []ImageMetadataInfo) {
 			apipath := "/images/" + string(repotag.Repo) + ":" + string(repotag.Tag)
 			blog.Info("RemoveImages %s", apipath)
 			config.BanyanUpdate("Remove", apipath)
-			_, err := DockerAPI(DockerTransport, "DELETE", apipath, []byte{}, "")
+			_, err := DockerAPI(DockerClient, "DELETE", apipath, []byte{}, "")
 			if err != nil {
 				except.Error(err, "RemoveImages Repo:Tag", repotag.Repo, repotag.Tag,
 					"image", metadata.Image)
@@ -274,6 +274,7 @@ func RegistryQueryV2(client *http.Client, URL string) (response []byte, e error)
 	if e != nil {
 		return
 	}
+	blog.Debug("Registry query succeeded")
 	return
 }
 

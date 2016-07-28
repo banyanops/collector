@@ -10,7 +10,7 @@ import (
 func TestListDanglingImages(t *testing.T) {
 	fmt.Println("ListDanglingImages")
 	var err error
-	DockerTransport, err = NewDockerTransport(DOCKERPROTO, DOCKERADDR)
+	DockerClient, err = NewDockerClient(DOCKERPROTO, DOCKERADDR)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +25,7 @@ func TestListDanglingImages(t *testing.T) {
 
 func TestRemoveImageByID(t *testing.T) {
 	var err error
-	DockerTransport, err = NewDockerTransport(DOCKERPROTO, DOCKERADDR)
+	DockerClient, err = NewDockerClient(DOCKERPROTO, DOCKERADDR)
 	if err != nil {
 		t.Fatal(err)
 	}

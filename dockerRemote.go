@@ -21,8 +21,8 @@ import (
 )
 
 var (
-	// DockerTransport points to the http transport used to connect to the docker unix socket
-	DockerTransport *http.Transport
+	// DockerClient is the http Client used to connect to the docker daemon endpoint
+	DockerClient    *http.Client
 	DockerTLSVerify = true
 	DockerProto     = "unix"
 	DockerAddr      = dummydomain
@@ -92,8 +92,10 @@ func NewTLSTransport(hostpath string, certfile, cafile, keyfile string) (transpo
 	return
 }
 
-// NewDockerTransport creates an HTTP transport to the Docker unix/tcp socket.
-func NewDockerTransport(proto, addr string) (tr *http.Transport, e error) {
+// NewDockerClient creates an HTTP transport to the Docker unix/tcp socket.
+func NewDockerClient(proto, addr string) (client *http.Client, e error) {
+	var tr *http.Transport
+
 	// check Docker environment variables
 	dockerHost := os.Getenv("DOCKER_HOST")
 	if os.Getenv("DOCKER_TLS_VERIFY") == "0" {
@@ -122,7 +124,7 @@ func NewDockerTransport(proto, addr string) (tr *http.Transport, e error) {
 	// create transport for unix socket
 	if DockerProto != "unix" && DockerProto != "tcp" {
 		e = errors.New("Protocol " + DockerProto + " is not yet supported")
-		return
+		goto out_err
 	}
 	if DockerProto == "unix" {
 		tr = &http.Transport{}
@@ -130,7 +132,7 @@ func NewDockerTransport(proto, addr string) (tr *http.Transport, e error) {
 		tr.Dial = func(_, _ string) (net.Conn, error) {
 			return net.DialTimeout(DockerProto, DockerAddr, HTTPTIMEOUT)
 		}
-		return
+		goto out
 	}
 	if DockerTLSVerify {
 		certfile := dockerCertPath + "/cert.pem"
@@ -140,16 +142,24 @@ func NewDockerTransport(proto, addr string) (tr *http.Transport, e error) {
 		if e != nil {
 			except.Fail(e, "NewTLSTransport")
 		}
-		return
+		goto out
 	}
 
 	tr = &http.Transport{}
+out:
+	client = &http.Client{Transport: tr, Timeout: DockerTimeout}
+	return
+out_err:
 	return
 }
 
 // DockerAPI performs an HTTP GET,POST,DELETE operation to the Docker daemon.
-func DockerAPI(tr *http.Transport, operation, apipath string, jsonString []byte,
+func DockerAPI(client *http.Client, operation, apipath string, jsonString []byte,
 	XRegistryAuth string) (resp []byte, e error) {
+	if client == nil {
+		e = errors.New("nil docker client")
+		return
+	}
 	switch operation {
 	case "GET", "POST", "DELETE":
 		break
@@ -181,7 +191,7 @@ func DockerAPI(tr *http.Transport, operation, apipath string, jsonString []byte,
 	}
 
 	//req.Header.Set("Authorization", "Bearer "+authToken)
-	client := &http.Client{Transport: tr, Timeout: DockerTimeout}
+	// client := &http.Client{Transport: tr, Timeout: DockerTimeout}
 	r, e := client.Do(req)
 	if e != nil {
 		except.Error(e, ":DockerAPI URL", URL, "client request failed")
@@ -203,7 +213,7 @@ func DockerAPI(tr *http.Transport, operation, apipath string, jsonString []byte,
 
 func DockerVersion() (major, minor, revision int, err error) {
 	apipath := "/version"
-	resp, err := DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
+	resp, err := DockerAPI(DockerClient, "GET", apipath, []byte{}, "")
 	if err != nil {
 		except.Error(err, ": Error in Remote Docker API call: ", apipath)
 		return
@@ -260,7 +270,7 @@ func createCmd(imageID ImageIDType, scriptName, staticBinary, dirPath string) (j
 // CreateContainer makes a docker remote API call to create a container.
 func CreateContainer(containerSpec []byte) (containerID string, err error) {
 	apipath := "/containers/create"
-	resp, err := DockerAPI(DockerTransport, "POST", apipath, containerSpec, "")
+	resp, err := DockerAPI(DockerClient, "POST", apipath, containerSpec, "")
 	if err != nil {
 		except.Error(err, ": Error in Remote Docker API call: ", apipath, string(containerSpec))
 		return
@@ -283,7 +293,7 @@ func CreateContainer(containerSpec []byte) (containerID string, err error) {
 // StartContainer makes a docker remote API call to start a container.
 func StartContainer(containerID string) (jsonOut []byte, err error) {
 	apipath := "/containers/" + containerID + "/start"
-	resp, err := DockerAPI(DockerTransport, "POST", apipath, []byte{}, "")
+	resp, err := DockerAPI(DockerClient, "POST", apipath, []byte{}, "")
 	if err != nil {
 		except.Error(err, ": Error in Remote Docker API call: ", apipath)
 		return
@@ -295,7 +305,7 @@ func StartContainer(containerID string) (jsonOut []byte, err error) {
 // WaitContainer makes a docker remote API call to wait for a container to finish running.
 func WaitContainer(containerID string) (statusCode int, err error) {
 	apipath := "/containers/" + containerID + "/wait"
-	resp, err := DockerAPI(DockerTransport, "POST", apipath, []byte{}, "")
+	resp, err := DockerAPI(DockerClient, "POST", apipath, []byte{}, "")
 	if err != nil {
 		except.Error(err, ": Error in Remote Docker API call: ", apipath)
 		return
@@ -317,7 +327,7 @@ func WaitContainer(containerID string) (statusCode int, err error) {
 // LogsContainer makes a docker remote API call to get logs from a container.
 func LogsContainer(containerID string) (output []byte, err error) {
 	apipath := "/containers/" + containerID + "/logs?stdout=1"
-	resp, err := DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
+	resp, err := DockerAPI(DockerClient, "GET", apipath, []byte{}, "")
 	if err != nil {
 		except.Error(err, ": Error in Remote Docker API call: ", apipath)
 		return
@@ -345,7 +355,7 @@ func LogsContainer(containerID string) (output []byte, err error) {
 // RemoveContainer makes a docker remote API call to remove a container.
 func RemoveContainer(containerID string) (resp []byte, err error) {
 	apipath := "/containers/" + containerID
-	resp, err = DockerAPI(DockerTransport, "DELETE", apipath, []byte{}, "")
+	resp, err = DockerAPI(DockerClient, "DELETE", apipath, []byte{}, "")
 	if err != nil {
 		except.Error(err)
 		return
@@ -357,7 +367,7 @@ func RemoveContainer(containerID string) (resp []byte, err error) {
 // listImages makes a docker remote API call to get a list of images
 func listImages() (resp []byte, err error) {
 	apipath := "/images/json"
-	resp, err = DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
+	resp, err = DockerAPI(DockerClient, "GET", apipath, []byte{}, "")
 	if err != nil {
 		except.Error(err)
 		return
@@ -371,7 +381,7 @@ func listImages() (resp []byte, err error) {
 func ListDanglingImages() (imageList []ImageIDType, err error) {
 	apipath := `/images/json?filters={"dangling":["true"]}`
 	// apipath = "/images/json"
-	resp, err := DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
+	resp, err := DockerAPI(DockerClient, "GET", apipath, []byte{}, "")
 	if err != nil {
 		except.Error(err, "ListDanglingImages")
 		return
@@ -392,7 +402,7 @@ func ListDanglingImages() (imageList []ImageIDType, err error) {
 // RemoveImageByID calls Docker to remove an image specified by ID.
 func RemoveImageByID(image ImageIDType) (resp []byte, err error) {
 	apipath := "/images/" + string(image)
-	resp, err = DockerAPI(DockerTransport, "DELETE", apipath, []byte{}, "")
+	resp, err = DockerAPI(DockerClient, "DELETE", apipath, []byte{}, "")
 	if err != nil {
 		except.Error(err, "RemoveImageByID")
 		return
@@ -402,7 +412,7 @@ func RemoveImageByID(image ImageIDType) (resp []byte, err error) {
 
 func InspectImage(imageID string) (resp []byte, err error) {
 	apipath := "/images/" + imageID + "/json"
-	resp, err = DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
+	resp, err = DockerAPI(DockerClient, "GET", apipath, []byte{}, "")
 	if err != nil {
 		except.Error(err)
 		return
@@ -413,7 +423,7 @@ func InspectImage(imageID string) (resp []byte, err error) {
 
 func InspectContainer(containerID string) (containerSpec ContainerInspection, err error) {
 	apipath := "/containers/" + containerID + "/json"
-	resp, err := DockerAPI(DockerTransport, "GET", apipath, []byte{}, "")
+	resp, err := DockerAPI(DockerClient, "GET", apipath, []byte{}, "")
 	if err != nil {
 		except.Error(err)
 		return

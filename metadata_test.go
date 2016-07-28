@@ -12,7 +12,7 @@ func TestGetLocalImageMetadata(t *testing.T) {
 	fmt.Println("TestGetLocalImageMetadata")
 
 	var e error
-	DockerTransport, e = NewDockerTransport(DOCKERPROTO, DOCKERADDR)
+	DockerClient, e = NewDockerClient(DOCKERPROTO, DOCKERADDR)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -61,7 +61,7 @@ func TestValidRepoName(t *testing.T) {
 
 func TestRegistryQuery(t *testing.T) {
 	var e error
-	DockerTransport, e = NewDockerTransport(DOCKERPROTO, DOCKERADDR)
+	DockerClient, e = NewDockerClient(DOCKERPROTO, DOCKERADDR)
 	if e != nil {
 		t.Fatal(e)
 	}

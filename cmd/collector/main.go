@@ -436,7 +436,7 @@ func main() {
 
 	// setup connection to docker daemon's unix/tcp socket
 	var e error
-	collector.DockerTransport, e = collector.NewDockerTransport(*dockerProto, *dockerAddr)
+	collector.DockerClient, e = collector.NewDockerClient(*dockerProto, *dockerAddr)
 	if e != nil {
 		except.Fail(e, ": Error in connecting to docker remote API socket")
 	}
