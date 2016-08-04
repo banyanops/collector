@@ -5,6 +5,8 @@ package log4go
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -28,9 +30,12 @@ type FileLogWriter struct {
 	maxsize         int
 	maxsize_cursize int
 
+	// Max days for log file storage
+	maxdays int
+
 	// Rotate daily
 	daily          bool
-	daily_opendate int
+	daily_opendate time.Time
 
 	// Keep old logfiles (.001, .002, etc)
 	rotate bool
@@ -55,32 +60,36 @@ func (w *FileLogWriter) Close() {
 //
 // The standard log-line format is:
 //   [%D %T] [%L] (%S) %M
-func NewFileLogWriter(fname string, rotate bool) *FileLogWriter {
-	f := &FileLogWriter{
+func NewFileLogWriter(fname string) *FileLogWriter {
+	w := &FileLogWriter{
 		filename: fname,
 		format:   "[%D %z %T] [%L] (%S) %M",
-		rotate:   rotate,
-		maxbackup: 999,
+		rotate:   false,
 	}
 
 	// open the file for the first time
-	if err := f.intRotate(); err != nil {
-		fmt.Fprintf(os.Stderr, "FileLogWriter(%q): %s\n", f.filename, err)
+	if err := w.intRotate(); err != nil {
+		fmt.Fprintf(os.Stderr, "FileLogWriter(%s): %s\n", w.filename, err)
 		return nil
 	}
-	
-	return f
+	return w
 }
 
 func (w *FileLogWriter) LogWrite(rec *LogRecord) {
 	now := time.Now()
+
 	if (w.maxlines > 0 && w.maxlines_curlines >= w.maxlines) ||
 		(w.maxsize > 0 && w.maxsize_cursize >= w.maxsize) ||
-		(w.daily && now.Day() != w.daily_opendate) {
+		(w.daily && now.Day() != w.daily_opendate.Day()) {
+		// open the file for the first time
 		if err := w.intRotate(); err != nil {
 			fmt.Fprintf(os.Stderr, "FileLogWriter(%q): %s\n", w.filename, err)
 			return
 		}
+	}
+
+	if w.file == nil {
+		return
 	}
 
 	// Perform the write
@@ -103,43 +112,54 @@ func (w *FileLogWriter) intRotate() error {
 		w.file.Close()
 	}
 
-	// If we are keeping log files, move it to the next available number
+	now := time.Now()
 	if w.rotate {
 		_, err := os.Lstat(w.filename)
-		if err == nil { // file exists
-			// Find the next available number
-			num := 1
-			fname := ""
-			if w.daily && time.Now().Day() != w.daily_opendate {
-				yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-				for ; err == nil && num <= 999; num++ {
-					fname = w.filename + fmt.Sprintf(".%s.%03d", yesterday, num)
-					_, err = os.Lstat(fname)
-				}
-				// return error if the last file checked still existed
-				if err == nil {
-					return fmt.Errorf("Rotate: Cannot find free log number to rename %s\n", w.filename)
-				}
-			} else {
-				num = w.maxbackup - 1
-				for ; num >= 1; num-- {
-					fname = w.filename + fmt.Sprintf(".%d", num)
-					nfname := w.filename + fmt.Sprintf(".%d", num+1)
-					_, err = os.Lstat(fname)
-					if err == nil {
-						os.Rename(fname, nfname)
-					}
- 				}
+		if err == nil {
+			// We are keeping log files, move it to the next available number
+			todate := now.Format("2006-01-02")
+			if w.daily && now.Day() != w.daily_opendate.Day() {
+				// rename as opendate
+				todate = w.daily_opendate.Format("2006-01-02")
 			}
 
-			w.file.Close()
+			renameto := ""
+			for num := 1; err == nil && num <= w.maxbackup; num++ {
+				renameto = w.filename + fmt.Sprintf(".%s.%03d", todate, num)
+				_, err = os.Lstat(renameto)
+			}
+
+			// return error if the last file checked still existed
+			if err == nil {
+				return fmt.Errorf("Cannot find free log number to rename")
+			}
+
 			// Rename the file to its newfound home
-			err = os.Rename(w.filename, fname)
+			err = os.Rename(w.filename, renameto)
 			if err != nil {
-				return fmt.Errorf("Rotate: %s\n", err)
+				return err
 			}
 		}
 	}
+
+	if w.maxdays > 0 {
+		go w.deleteOldLog()
+	}
+
+	if fstatus, err := os.Lstat(w.filename); err == nil {
+		// Set the daily open date to file last modify
+		w.daily_opendate = fstatus.ModTime()
+		// initialize rotation values
+		w.maxsize_cursize = int(fstatus.Size())
+		// fmt.Fprintf(os.Stderr, "FileLogWriter(%q): set cursize %d\n", w.filename, w.maxsize_cursize)
+		// fmt.Fprintf(os.Stderr, "FileLogWriter(%q): set open date %v\n", w.filename, w.daily_opendate)
+	} else {
+		// Set the daily open date to the current date
+		w.daily_opendate = now
+		w.maxsize_cursize = 0
+	}
+	// initialize other rotation values
+	w.maxlines_curlines = 0
 
 	// Open the log file
 	fd, err := os.OpenFile(w.filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
@@ -149,17 +169,32 @@ func (w *FileLogWriter) intRotate() error {
 	}
 	w.file = fd
 
-	now := time.Now()
 	fmt.Fprint(w.file, FormatLogRecord(w.header, &LogRecord{Created: now}))
-
-	// Set the daily open date to the current date
-	w.daily_opendate = now.Day()
-
-	// initialize rotation values
-	w.maxlines_curlines = 0
-	w.maxsize_cursize = 0
-
 	return nil
+}
+
+// Delete old log files which were expired.
+func (w *FileLogWriter) deleteOldLog() {
+	if w.maxdays <= 0 {
+		return
+	}
+	dir := filepath.Dir(w.filename)
+	base := filepath.Base(w.filename)
+	modtime := time.Now().Unix() - int64(60*60*24*w.maxdays)
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) (returnErr error) {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Fprintf(os.Stderr, "FileLogWriter: Unable to remove old log '%s', error: %+v\n", path, err)
+			}
+		}()
+
+		if !info.IsDir() && info.ModTime().Unix() < modtime {
+			if strings.HasPrefix(filepath.Base(path), base) {
+				os.Remove(path)
+			}
+		}
+		return
+	})
 }
 
 // Set the logging format (chainable).  Must be called before the first log
@@ -196,6 +231,12 @@ func (w *FileLogWriter) SetRotateSize(maxsize int) *FileLogWriter {
 	return w
 }
 
+// Set max expire days.
+func (w *FileLogWriter) SetRotateDays(maxdays int) *FileLogWriter {
+	w.maxdays = maxdays
+	return w
+}
+
 // Set rotate daily (chainable). Must be called before the first log message is
 // written.
 func (w *FileLogWriter) SetRotateDaily(daily bool) *FileLogWriter {
@@ -216,15 +257,15 @@ func (w *FileLogWriter) SetRotate(rotate bool) *FileLogWriter {
 
 // Set max backup files. Must be called before the first log message
 // is written.
-func (w *FileLogWriter) SetRotateMaxBackup(maxbackup int) *FileLogWriter {
+func (w *FileLogWriter) SetRotateBackup(maxbackup int) *FileLogWriter {
 	w.maxbackup = maxbackup
 	return w
 }
 
 // NewXMLLogWriter is a utility method for creating a FileLogWriter set up to
 // output XML record log messages instead of line-based ones.
-func NewXMLLogWriter(fname string, rotate bool) *FileLogWriter {
-	return NewFileLogWriter(fname, rotate).SetFormat(
+func NewXMLLogWriter(fname string) *FileLogWriter {
+	return NewFileLogWriter(fname).SetFormat(
 		`	<record level="%L">
 		<timestamp>%D %T</timestamp>
 		<source>%S</source>

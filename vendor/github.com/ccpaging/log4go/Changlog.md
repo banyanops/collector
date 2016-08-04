@@ -1,6 +1,20 @@
+2016-03-03
+
+* start goroutine to delete expired log files. Merge from <https://github.com/yougg/log4go>
+
+2016-02-17
+
+* Append log record to current filelog if not oversized
+
+* Fixed Bug: filelog's rename
+
+2015-12-08
+
+* Add maxbackup to filelog
+
 2015-06-09
 
-* Sleep before blocking logwrite channel then wait for drain
+* Sleeping at most one second and let go routine running drain the log channel before closing
 
 2015-06-01
 
@@ -10,11 +24,11 @@
 
 * When closing, Filter:
   
-  + Drain all left msgs
+  + Drain all left log records
   
   + Write them by LogWriter interface
   
-  + Close interface
+  + Then close interface
   
 * Every Filter run a routine to recv rec and call LogWriter to write
 
@@ -26,7 +40,7 @@ Some ideas come from <https://github.com/ngmoco/timber>. Thanks.
 
 2015-05-12
 
-* Add console format. Merge from <https://github.com/alecthomas/log4go>
+* Add termlog format. Merge from <https://github.com/alecthomas/log4go>
 
 2015-04-30
 
@@ -36,7 +50,7 @@ Some ideas come from <https://github.com/ngmoco/timber>. Thanks.
 
 * Support json config
 
-* Fixed Bug: lost console and file record
+* Fixed Bug: lost record in termlog and filelog
 
 2015-01-05 support console color print
 

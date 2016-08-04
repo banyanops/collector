@@ -77,7 +77,7 @@ func (log Logger) LoadJSONConfig(filename string, contents []byte) {
 		fmt.Fprintf(os.Stderr, "LoadConfig: Error: Could not parse Json configuration in %q: %s\n", filename, err)
 		os.Exit(1)
 	}
-	
+
 	log.ConfigToLogWriter(filename, jc)
 }
 
@@ -90,7 +90,7 @@ func (log Logger) LoadXMLConfig(filename string, contents []byte) {
 		fmt.Fprintf(os.Stderr, "LoadConfig: Error: Could not parse XML configuration in %q: %s\n", filename, err)
 		os.Exit(1)
 	}
-	
+
 	log.ConfigToLogWriter(filename, xc)
 }
 
@@ -228,6 +228,8 @@ func propToFileLogWriter(filename string, props []kvProperty, enabled bool) (*Fi
 	maxsize := 0
 	daily := false
 	rotate := false
+	maxbackup := 999
+	maxdays := 0
 
 	// Parse properties
 	for _, prop := range props {
@@ -240,10 +242,14 @@ func propToFileLogWriter(filename string, props []kvProperty, enabled bool) (*Fi
 			maxlines = strToNumSuffix(strings.Trim(prop.Value, " \r\n"), 1000)
 		case "maxsize":
 			maxsize = strToNumSuffix(strings.Trim(prop.Value, " \r\n"), 1024)
+		case "maxdays":
+			maxdays = strToNumSuffix(strings.Trim(prop.Value, " \r\n"), 0)
 		case "daily":
 			daily = strings.Trim(prop.Value, " \r\n") != "false"
 		case "rotate":
 			rotate = strings.Trim(prop.Value, " \r\n") != "false"
+		case "maxBackup":
+			maxbackup = strToNumSuffix(strings.Trim(prop.Value, " \r\n"), 999)
 		default:
 			fmt.Fprintf(os.Stderr, "LoadConfig: Warning: Unknown property \"%s\" for file filter in %s\n", prop.Name, filename)
 		}
@@ -260,14 +266,17 @@ func propToFileLogWriter(filename string, props []kvProperty, enabled bool) (*Fi
 		return nil, true
 	}
 
-	flw := NewFileLogWriter(file, rotate)
+	flw := NewFileLogWriter(file)
 	if flw == nil {
 		return nil, false
 	}
 	flw.SetFormat(format)
+	flw.SetRotate(rotate)
 	flw.SetRotateLines(maxlines)
 	flw.SetRotateSize(maxsize)
+	flw.SetRotateDays(maxdays)
 	flw.SetRotateDaily(daily)
+	flw.SetRotateBackup(maxbackup)
 	return flw, true
 }
 
@@ -307,7 +316,8 @@ func propToXMLLogWriter(filename string, props []kvProperty, enabled bool) (*Fil
 		return nil, true
 	}
 
-	xlw := NewXMLLogWriter(file, rotate)
+	xlw := NewXMLLogWriter(file)
+	xlw.SetRotate(rotate)
 	xlw.SetRotateLines(maxrecords)
 	xlw.SetRotateSize(maxsize)
 	xlw.SetRotateDaily(daily)

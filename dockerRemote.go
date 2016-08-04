@@ -18,6 +18,7 @@ import (
 	config "github.com/banyanops/collector/config"
 	except "github.com/banyanops/collector/except"
 	blog "github.com/ccpaging/log4go"
+	uuid "github.com/pborman/uuid"
 )
 
 var (
@@ -37,6 +38,8 @@ const (
 	TARGETCONTAINERDIR = "/banyancollector"
 	// DockerTimeout specifies how long to wait for Docker daemon to finish a task, like pull image.
 	DockerTimeout = time.Minute * 10
+	// Prefix of container name for image scanning
+	ScanContainerNamePrefix = "banyan-collector-image-scan-"
 )
 
 type HostConfig struct {
@@ -269,7 +272,7 @@ func createCmd(imageID ImageIDType, scriptName, staticBinary, dirPath string) (j
 
 // CreateContainer makes a docker remote API call to create a container.
 func CreateContainer(containerSpec []byte) (containerID string, err error) {
-	apipath := "/containers/create"
+	apipath := "/containers/create?name=" + ScanContainerNamePrefix + uuid.New()
 	resp, err := DockerAPI(DockerClient, "POST", apipath, containerSpec, "")
 	if err != nil {
 		except.Error(err, ": Error in Remote Docker API call: ", apipath, string(containerSpec))

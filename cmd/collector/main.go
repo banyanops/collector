@@ -389,7 +389,7 @@ func setupLogging() {
 			except.Fail(e, ": Error in opening log file: ", LOGFILENAME)
 		}
 		f.Close()
-		flw := blog.NewFileLogWriter(LOGFILENAME, false)
+		flw := blog.NewFileLogWriter(LOGFILENAME)
 		blog.AddFilter("file", FILELOGLEVEL, flw)
 	}
 }

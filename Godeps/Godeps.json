@@ -2,10 +2,14 @@
 	"ImportPath": "github.com/banyanops/collector",
 	"GoVersion": "go1.6",
 	"GodepVersion": "v74",
+	"Packages": [
+		"./..."
+	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/ccpaging/log4go",
-			"Rev": "44e1a1fd86dd798f199a62260aa3d29893326f3f"
+			"Comment": "4.0.1",
+			"Rev": "bd7aa01a7a200ee221189fd3232929693e8a9b31"
 		},
 		{
 			"ImportPath": "github.com/daviddengcn/go-colortext",
@@ -25,6 +29,11 @@
 			"ImportPath": "github.com/docker/libcontainer/user",
 			"Comment": "v2.2.1",
 			"Rev": "5dc7ba0f24332273461e45bc49edcb4d5aa6c44c"
+		},
+		{
+			"ImportPath": "github.com/pborman/uuid",
+			"Comment": "v1.0-11-gc55201b",
+			"Rev": "c55201b036063326c5b1b89ccfe45a184973d073"
 		},
 		{
 			"ImportPath": "gopkg.in/yaml.v2",
