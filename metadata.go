@@ -71,6 +71,7 @@ type ImageMetadataInfo struct {
 	Datetime time.Time //created at
 	OtherMetadata
 	ManifestHash string // we calculate a sha256 hex of JSON image manifest returned by a v2 registry
+	Registry     string
 }
 
 type OtherMetadata struct {
@@ -99,6 +100,24 @@ func (m MetadataSet) Insert(metadata ImageMetadataInfo) {
 	m[metadata] = true
 }
 
+// cleanImageID returns an image ID after stripping any "encoding:" prefix.
+func cleanImageID(ID string) string {
+	if len(ID) == 0 {
+		return ""
+	}
+	index := strings.LastIndex(ID, ":")
+	if index < 0 {
+		return ID
+	}
+	return ID[index+1:]
+}
+
+// cleanOther returns OtherMetadata with Parent image ID obtained by stripping any "encoding:" prefix
+func cleanOther(other OtherMetadata) OtherMetadata {
+	other.Parent = cleanImageID(other.Parent)
+	return other
+}
+
 // Exists returns true if the metadata entry is in the MetadataSet.
 // If there's no exact match, then a search is attempted for an
 // entry in the set with non-contradictory values for
@@ -111,9 +130,9 @@ func (m MetadataSet) Exists(metadata ImageMetadataInfo) bool {
 	}
 	// No exact match, so search all items in the set for a Repo+Tag match
 	// without a contradictory ManifestHash or imageID value
-	metadataOther := metadata.OtherMetadata
+	metadataOther := cleanOther(metadata.OtherMetadata)
 	for item, _ := range m {
-		itemOther := item.OtherMetadata
+		itemOther := cleanOther(item.OtherMetadata)
 		if itemOther == metadataOther {
 			time1 := item.Datetime.Truncate(time.Second)
 			time2 := metadata.Datetime.Truncate(time.Second)
@@ -121,7 +140,7 @@ func (m MetadataSet) Exists(metadata ImageMetadataInfo) bool {
 				continue
 			}
 			contradiction := len(metadata.Image) > 0 && len(item.Image) > 0 &&
-				metadata.Image != item.Image
+				cleanImageID(metadata.Image) != cleanImageID(item.Image)
 			if contradiction {
 				continue
 			}
@@ -219,8 +238,9 @@ type TagInfo struct {
 
 // RepoTagType represents a docker repository and tag.
 type RepoTagType struct {
-	Repo RepoType
-	Tag  TagType
+	Repo     RepoType
+	Tag      TagType
+	Registry string
 }
 
 // Docker repository description.
@@ -353,7 +373,7 @@ func CheckRepoToProcess(repo RepoType) bool {
 // "localhost:5000" is a registry
 // "test/busybox" is a repository
 // "latest" is a tag
-// ExtractRepoTag conditionally strips out registry and returns repo and tag in RepoTagType
+// ExtractRepoTag conditionally strips out registry and returns registry, repo and tag in RepoTagType
 func ExtractRepoTag(regRepoTag string, stripReg bool) (repoTag RepoTagType, e error) {
 
 	ss := strings.Split(regRepoTag, ":")
@@ -370,11 +390,13 @@ func ExtractRepoTag(regRepoTag string, stripReg bool) (repoTag RepoTagType, e er
 	}
 
 	ss = strings.Split(regRepo, "/")
+	registry := ""
 	if len(ss) > 1 && strings.ContainsAny(ss[0], ".:") {
 		// ss[0] is a registry name, strip it out
+		registry = ss[0]
 		regRepo = regRepo[len(ss[0])+1:]
 	}
-	repoTag = RepoTagType{Repo: RepoType(regRepo), Tag: TagType(tag)}
+	repoTag = RepoTagType{Registry: registry, Repo: RepoType(regRepo), Tag: TagType(tag)}
 	return repoTag, e
 }
 
@@ -496,7 +518,7 @@ func GetImageMetadata(oldMetadataSet MetadataSet) (metadataSlice []ImageMetadata
 			imageMap := make(ImageToRepoTagMap)
 			for _, ti := range tagSlice {
 				for tag, imageID := range ti.TagMap {
-					repotag := RepoTagType{Repo: ti.Repo, Tag: tag}
+					repotag := RepoTagType{Registry: RegistrySpec, Repo: ti.Repo, Tag: tag}
 
 					imageMap.Insert(imageID, repotag)
 				}
@@ -790,6 +812,7 @@ func v2GetMetadata(client *http.Client, repo, tag string) (metadata ImageMetadat
 		return
 	}
 
+	metadata.Registry = RegistrySpec
 	metadata.Repo = repo
 	metadata.Tag = tag
 	metadata.Image = ""
@@ -1038,7 +1061,7 @@ func GetNewImageMetadata(oldMetadataSet MetadataSet) (metadataSlice []ImageMetad
 				}
 			} else {
 				obsolete = append(obsolete, metadata)
-				blog.Info("Obsolete ImageMetadata: %v", metadata)
+				blog.Info("Obsolete ImageMetadata: %+v", metadata)
 			}
 		}
 	}
@@ -1239,6 +1262,11 @@ func GetImageMetadataSpecifiedV1(imageMap map[ImageIDType][]RepoTagType,
 			// _ = repotag
 			newmd.Repo = string(repotag.Repo)
 			newmd.Tag = string(repotag.Tag)
+			if LocalHost {
+				newmd.Registry = string(repotag.Registry)
+			} else {
+				newmd.Registry = RegistrySpec
+			}
 			finalMetadataSlice = append(finalMetadataSlice, newmd)
 		}
 	}
