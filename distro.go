@@ -11,6 +11,7 @@ import (
 
 // DistroMap is a reference that maps each pretty name to the corresponding distribution name.
 var DistroMap = map[string]string{
+	"Ubuntu 16.10":                               "UBUNTU-yakkety",
 	"Ubuntu 16.04":                               "UBUNTU-xenial",
 	"Ubuntu 15.10":                               "UBUNTU-wily",
 	"Ubuntu 15.04":                               "UBUNTU-vivid",
@@ -67,6 +68,9 @@ func getDistroID(distroName string) string {
 	}
 
 	//Exceptions to the rule: There are many such cases, so bucketing them together
+	if strings.HasPrefix(distroName, `Ubuntu 16.10`) {
+		return "UBUNTU-yakkety"
+	}
 	if strings.HasPrefix(distroName, `Ubuntu 16.04`) {
 		return "UBUNTU-xenial"
 	}
