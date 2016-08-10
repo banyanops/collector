@@ -48,6 +48,12 @@ var (
 	dockerAddr = flag.String([]string{"-dockeraddr"}, "/var/run/docker.sock",
 		"Address of Docker remote API socket (filepath or IP:port)")
 
+	// Docker Registry rate limiting
+	maxRequests  = flag.Int([]string{"-maxreq"}, 0, "max # of requests to registry in time period (0 for no limit)")
+	maxRequests2 = flag.Int([]string{"-maxreq2"}, 0, "max # of requests to registry in time period 2 (0 for no limit)")
+	timePeriod   = flag.Duration([]string{"-timeper"}, 10*time.Minute, "registry request rate limiting time period")
+	timePeriod2  = flag.Duration([]string{"-timeper2"}, 24*time.Hour, "registry request rate limiting time period 2")
+
 	// positional arguments: a list of repos to process, all others are ignored.
 )
 
