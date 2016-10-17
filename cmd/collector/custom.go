@@ -11,7 +11,7 @@ import (
 	except "github.com/banyanops/collector/except"
 	fsutil "github.com/banyanops/collector/fsutil"
 	blog "github.com/ccpaging/log4go"
-	flag "github.com/docker/docker/pkg/mflag"
+	flag "github.com/spf13/pflag"
 )
 
 func init() {

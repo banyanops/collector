@@ -8,12 +8,12 @@ import (
 	config "github.com/banyanops/collector/config"
 	except "github.com/banyanops/collector/except"
 	blog "github.com/ccpaging/log4go"
-	flag "github.com/docker/docker/pkg/mflag"
+	flag "github.com/spf13/pflag"
 )
 
 var (
 	//userScriptsDir    = flag.String([]string{"userscriptsdir"}, config.BANYANDIR()+"/hosttarget/userscripts", "Directory with all user-specified scripts")
-	UserScriptStore   = flag.String([]string{"u", "-userscriptstore"}, config.COLLECTORDIR()+"/data/userscripts", "Directory with all user-specified scripts")
+	UserScriptStore   = flag.StringP("userscriptstore", "u", config.COLLECTORDIR()+"/data/userscripts", "Directory with all user-specified scripts")
 	UserScriptsDir    = config.BANYANDIR() + "/hosttarget/userscripts"
 	DefaultScriptsDir = config.BANYANDIR() + "/hosttarget/defaultscripts"
 	BinDir            = config.BANYANDIR() + "/hosttarget/bin"
