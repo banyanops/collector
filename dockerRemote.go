@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -233,7 +234,19 @@ func DockerVersion() (major, minor, revision int, err error) {
 		}
 	}
 	if len(arr) >= 3 {
-		revision, err = strconv.Atoi(arr[2])
+		field := arr[2]
+		var re *regexp.Regexp
+		re, err = regexp.Compile(`^(\d+).*$`)
+		if err != nil {
+			except.Error(err)
+			return
+		}
+		result := re.FindStringSubmatch(field)
+		if len(result) < 2 {
+			return
+		}
+		revStr := result[1]
+		revision, err = strconv.Atoi(revStr)
 		if err != nil {
 			except.Error(err)
 			return
