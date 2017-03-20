@@ -27,7 +27,7 @@ func TestMain(m *testing.M) {
 func TestPullImageOne(t *testing.T) {
 	fmt.Println("TestPullImage")
 	var e error
-	DockerTransport, e = NewDockerTransport(DOCKERPROTO, DOCKERADDR)
+	DockerClient, e = NewDockerClient(DOCKERPROTO, DOCKERADDR)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -51,7 +51,7 @@ func TestPullImageOne(t *testing.T) {
 func TestPullImageBogusID(t *testing.T) {
 	fmt.Println("TestPullImageBogusID")
 	var e error
-	DockerTransport, e = NewDockerTransport(DOCKERPROTO, DOCKERADDR)
+	DockerClient, e = NewDockerClient(DOCKERPROTO, DOCKERADDR)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -141,7 +141,7 @@ func TestGetReposHub(t *testing.T) {
 func TestGetTagsMetadataHub(t *testing.T) {
 	var e error
 	fmt.Println("TestGetTagsMetadataHub")
-	DockerTransport, e = NewDockerTransport(DOCKERPROTO, DOCKERADDR)
+	DockerClient, e = NewDockerClient(DOCKERPROTO, DOCKERADDR)
 	if e != nil {
 		t.Fatal(e)
 	}

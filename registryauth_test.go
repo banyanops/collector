@@ -11,7 +11,7 @@ import (
 func TestRegAuth(t *testing.T) {
 	fmt.Println("TestRegAuth")
 	var e error
-	DockerTransport, e = NewDockerTransport(DOCKERPROTO, DOCKERADDR)
+	DockerClient, e = NewDockerClient(DOCKERPROTO, DOCKERADDR)
 	if e != nil {
 		t.Fatal(e)
 	}

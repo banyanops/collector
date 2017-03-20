@@ -11,9 +11,9 @@ import (
 
 	config "github.com/banyanops/collector/config"
 	except "github.com/banyanops/collector/except"
-	gcr "github.com/banyanops/collector/gcr"
-	flag "github.com/docker/docker/pkg/mflag"
-	"k8s.io/kubernetes/pkg/credentialprovider"
+	// gcr "github.com/banyanops/collector/gcr"
+	flag "github.com/spf13/pflag"
+	// "k8s.io/kubernetes/pkg/credentialprovider"
 )
 
 const ()
@@ -23,20 +23,16 @@ var (
 	HubAPI bool
 	// LocalHost indicates whether to collect images from local host
 	LocalHost     bool
-	HTTPSRegistry = flag.Bool([]string{"-registryhttps"}, true,
+	HTTPSRegistry = flag.Bool("registryhttps", true,
 		"Set to false if registry does not need HTTPS (SSL/TLS)")
-	AuthRegistry = flag.Bool([]string{"-registryauth"}, true,
+	AuthRegistry = flag.Bool("registryauth", true,
 		"Set to false if registry does not need authentication")
-	RegistryProto = flag.String([]string{"-registryproto"}, "v2",
+	RegistryProto = flag.String("registryproto", "v2",
 		"Select the registry protocol to use: v1, v2, quay")
-	RegistryTokenAuthV1 = flag.Bool([]string{"#-registrytokenauthv1"}, false,
+	RegistryTokenAuthV1 = flag.Bool("registrytokenauthv1", false,
 		"Registry uses v1 Token Auth, e.g., original v1 Docker Hub")
-	RegistryTLSNoVerify = flag.Bool([]string{"-registrytlsnoverify"}, false,
+	RegistryTLSNoVerify = flag.Bool("registrytlsnoverify", false,
 		"True to trust the registry without verifying certificate")
-	GCEMetadata = flag.Bool([]string{"-gce-metadata"}, false,
-		"True to query GCE instance metadata for Docker credentials")
-	GCEKeyFile = flag.String([]string{"-gce-key-file"}, "",
-		"Set to the pathname of the GCE service account JSON key")
 	// registryspec is the host.domainname of the registry
 	RegistrySpec string
 	// registryAPIURL is the http(s)://[user:password@]host.domainname of the registry
@@ -48,6 +44,13 @@ var (
 	// DockerConfig is the name of the config file containing registry authentication information.
 	DockerConfig string
 )
+
+func init() {
+	toHide := flag.Lookup("registrytokenauthv1")
+	if toHide != nil {
+		toHide.Hidden = true
+	}
+}
 
 // DockerConfigJSON is used to decode $HOME/.docker/config.json
 type DockerConfigJSON struct {
@@ -96,13 +99,6 @@ func RegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
 	if *AuthRegistry == false {
 		fullRegistry = registry
 		return
-	}
-
-	if *GCEMetadata {
-		return GCEMetadataRegAuth(registry)
-	}
-	if *GCEKeyFile > "" {
-		return GCEKeyFileRegAuth(registry)
 	}
 
 	if len(DockerConfig) == 0 {
@@ -197,36 +193,6 @@ func globMatch(registry, glob string) bool {
 		}
 	}
 	return true
-}
-
-// GCRAuth parses the credentialprovider.DockerConfig to get Docker registry credentials.
-func GCRAuth(registry string, dockerConfig credentialprovider.DockerConfig) (basicAuth, fullRegistry, authConfig string) {
-	for glob := range dockerConfig {
-		if !globMatch(registry, glob) {
-			continue
-		}
-		entry := dockerConfig[glob]
-		fieldValue := entry.Username + ":" + entry.Password
-		basicAuth = base64.StdEncoding.EncodeToString([]byte(fieldValue))
-		authConfig = getAuthConfig(entry.Username, entry.Password, basicAuth, entry.Email, registry)
-		fullRegistry = "https://" + registry
-		return
-	}
-	return
-}
-
-// GCEMetadataRegAuth queries GCE instance metadata to get Docker registry credentials.
-func GCEMetadataRegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
-	gcr.MetadataInit()
-	dockerConfig := gcr.Metadata()
-	return GCRAuth(registry, dockerConfig)
-}
-
-// GCEKeyFileRegAuth uses a GCE service account JSON key to get Docker registry credentials.
-func GCEKeyFileRegAuth(registry string) (basicAuth, fullRegistry, authConfig string) {
-	gcr.JWTInit(*GCEKeyFile)
-	dockerConfig := gcr.JWT()
-	return GCRAuth(registry, dockerConfig)
 }
 
 // AuthConfig is a Registry auth info type

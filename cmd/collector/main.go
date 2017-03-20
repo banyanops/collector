@@ -15,7 +15,7 @@ import (
 	except "github.com/banyanops/collector/except"
 	fsutil "github.com/banyanops/collector/fsutil"
 	blog "github.com/ccpaging/log4go"
-	flag "github.com/docker/docker/pkg/mflag"
+	flag "github.com/spf13/pflag"
 )
 
 const (
@@ -29,27 +29,40 @@ const (
 
 var (
 	LOGFILENAME = config.BANYANDIR() + "/hostcollector/collector.log"
-	fileLog     = flag.Bool([]string{"-filelog"}, false, "Log output to "+LOGFILENAME)
-	imageList   = flag.String([]string{"#-imagelist"}, config.BANYANDIR()+"/hostcollector/imagelist",
+	fileLog     = flag.Bool("filelog", false, "Log output to "+LOGFILENAME)
+	imageList   = flag.String("imagelist", config.BANYANDIR()+"/hostcollector/imagelist",
 		"List of previously collected images (file)")
-	repoList = flag.String([]string{"r", "-repolist"}, config.BANYANDIR()+"/hostcollector/repolist",
+	repoList = flag.StringP("repolist", "r", config.BANYANDIR()+"/hostcollector/repolist",
 		"File containing list of repos to process")
 
 	// Configuration parameters for speed/efficiency
-	removeThresh = flag.Int([]string{"-removethresh"}, 5,
+	removeThresh = flag.Int("removethresh", 5,
 		"Number of images that get pulled before removal")
-	maxImages = flag.Int([]string{"-maximages"}, 0, "Maximum number of new images to process per repository (0=unlimited)")
+	maxImages = flag.Int("maximages", 0, "Maximum number of new images to process per repository (0=unlimited)")
 	//nextMaxImages int
-	poll = flag.Int64([]string{"p", "-poll"}, 60, "Polling interval in seconds")
+	poll = flag.Int64P("poll", "p", 60, "Polling interval in seconds")
 
 	// Docker remote API related parameters
-	dockerProto = flag.String([]string{"-dockerproto"}, "unix",
+	dockerProto = flag.String("dockerproto", "unix",
 		"Socket protocol for Docker Remote API (\"unix\" or \"tcp\")")
-	dockerAddr = flag.String([]string{"-dockeraddr"}, "/var/run/docker.sock",
+	dockerAddr = flag.String("dockeraddr", "/var/run/docker.sock",
 		"Address of Docker remote API socket (filepath or IP:port)")
+
+	// Docker Registry rate limiting
+	maxRequests  = flag.Int("maxreq", 0, "max # of requests to registry in time period (0 for no limit)")
+	maxRequests2 = flag.Int("maxreq2", 0, "max # of requests to registry in time period 2 (0 for no limit)")
+	timePeriod   = flag.Duration("timeper", 10*time.Minute, "registry request rate limiting time period")
+	timePeriod2  = flag.Duration("timeper2", 24*time.Hour, "registry request rate limiting time period 2")
 
 	// positional arguments: a list of repos to process, all others are ignored.
 )
+
+func init() {
+	toHide := flag.Lookup("imagelist")
+	if toHide != nil {
+		toHide.Hidden = true
+	}
+}
 
 type RepoSet map[collector.RepoType]bool
 
@@ -73,7 +86,7 @@ func updateRepoTagImageID(metadata *collector.ImageMetadataInfo, oldMetadataSet 
 }
 
 // DoIteration runs one iteration of the main loop to get new images, extract data from them,
-// and saves results.
+// and save results.
 func DoIteration(ReposToLimit RepoSet, authToken string,
 	processedImages collector.ImageSet, oldMetadataSet collector.MetadataSet,
 	PulledList []collector.ImageMetadataInfo) (currentMetadataSet collector.MetadataSet,
@@ -389,7 +402,7 @@ func setupLogging() {
 			except.Fail(e, ": Error in opening log file: ", LOGFILENAME)
 		}
 		f.Close()
-		flw := blog.NewFileLogWriter(LOGFILENAME, false)
+		flw := blog.NewFileLogWriter(LOGFILENAME)
 		blog.AddFilter("file", FILELOGLEVEL, flw)
 	}
 }
@@ -436,7 +449,7 @@ func main() {
 
 	// setup connection to docker daemon's unix/tcp socket
 	var e error
-	collector.DockerTransport, e = collector.NewDockerTransport(*dockerProto, *dockerAddr)
+	collector.DockerClient, e = collector.NewDockerClient(*dockerProto, *dockerAddr)
 	if e != nil {
 		except.Fail(e, ": Error in connecting to docker remote API socket")
 	}

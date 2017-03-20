@@ -28,7 +28,7 @@ func TestCreateCmd(t *testing.T) {
 
 func TestBashScriptRun(t *testing.T) {
 	var e error
-	DockerTransport, e = NewDockerTransport(DOCKERPROTO, DOCKERADDR)
+	DockerClient, e = NewDockerClient(DOCKERPROTO, DOCKERADDR)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -59,7 +59,7 @@ func TestBashScriptRun(t *testing.T) {
 }
 
 func TestPostDockerAPI(t *testing.T) {
-	tr, e := NewDockerTransport(DOCKERPROTO, DOCKERADDR)
+	client, e := NewDockerClient(DOCKERPROTO, DOCKERADDR)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -70,7 +70,7 @@ func TestPostDockerAPI(t *testing.T) {
 		`"/banyancollector/bash-static" ], "Image": "ubuntu", "WorkingDir": "", "HostConfig": { ` +
 		`"Binds": [ "` + os.Getenv("PWD") + `/docker/data:/banyancollector:ro" ], "Links": null, ` +
 		`"Privileged": false, "VolumesFrom": null } }`)
-	resp, err := DockerAPI(tr, "POST", apipath, jsonString, "")
+	resp, err := DockerAPI(client, "POST", apipath, jsonString, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -11,7 +11,7 @@ import (
 	except "github.com/banyanops/collector/except"
 	fsutil "github.com/banyanops/collector/fsutil"
 	blog "github.com/ccpaging/log4go"
-	flag "github.com/docker/docker/pkg/mflag"
+	flag "github.com/spf13/pflag"
 )
 
 func init() {
@@ -72,6 +72,19 @@ func doFlags() {
 		collector.LocalHost = true
 	}
 	//nextMaxImages = *maxImages
+
+	if *maxRequests != 0 {
+		err := collector.AddRegistryRateLimiter(*maxRequests, *timePeriod)
+		if err != nil {
+			except.Fail(err, ": Error in setting registry rate limiter")
+		}
+	}
+	if *maxRequests2 != 0 {
+		err := collector.AddRegistryRateLimiter(*maxRequests2, *timePeriod2)
+		if err != nil {
+			except.Fail(err, ": Error in setting registry rate limiter")
+		}
+	}
 }
 
 func printExampleUsage() {
