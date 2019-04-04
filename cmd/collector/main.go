@@ -11,6 +11,7 @@ import (
 	"time"
 
 	collector "github.com/banyanops/collector"
+	auth "github.com/banyanops/collector/auth"
 	config "github.com/banyanops/collector/config"
 	except "github.com/banyanops/collector/except"
 	fsutil "github.com/banyanops/collector/fsutil"
@@ -87,7 +88,7 @@ func updateRepoTagImageID(metadata *collector.ImageMetadataInfo, oldMetadataSet 
 
 // DoIteration runs one iteration of the main loop to get new images, extract data from them,
 // and save results.
-func DoIteration(ReposToLimit RepoSet, authToken string,
+func DoIteration(ReposToLimit RepoSet, tokenSync *auth.TokenSyncInfo,
 	processedImages collector.ImageSet, oldMetadataSet collector.MetadataSet,
 	PulledList []collector.ImageMetadataInfo) (currentMetadataSet collector.MetadataSet,
 	PulledNew []collector.ImageMetadataInfo) {
@@ -417,24 +418,23 @@ func copyBanyanData() {
 	fsutil.CopyDirTree(config.COLLECTORDIR()+"/data/bin/*", collector.BinDir)
 }
 
-func InfLoop(authToken string, processedImages collector.ImageSet) {
+func InfLoop(tokenSync *auth.TokenSyncInfo, processedImages collector.ImageSet) {
 	duration := time.Duration(*poll) * time.Second
 	reposToLimit := NewRepoSet()
 
 	// Image Metadata we have already seen
 	metadataSet := collector.NewMetadataSet()
-	initMetadataSet(authToken, metadataSet)
+	initMetadataSet(tokenSync, metadataSet)
 	pulledList := []collector.ImageMetadataInfo{}
 
 	for {
 		config.BanyanUpdate("New iteration")
-		metadataSet, pulledList = DoIteration(reposToLimit, authToken, processedImages, metadataSet, pulledList)
+		metadataSet, pulledList = DoIteration(reposToLimit, tokenSync, processedImages, metadataSet, pulledList)
 
 		blog.Info("Looping in %d seconds", *poll)
 		config.BanyanUpdate("Sleeping for", strconv.FormatInt(*poll, 10), "seconds")
 		time.Sleep(duration)
 		checkConfigUpdate(false)
-		authToken = refreshToken(authToken)
 	}
 }
 
@@ -454,11 +454,13 @@ func main() {
 		except.Fail(e, ": Error in connecting to docker remote API socket")
 	}
 
-	authToken := RegisterCollector()
+	var tokenSync auth.TokenSyncInfo
+	tokenSync.SetApplication("collector")
+	RegisterCollector(&tokenSync)
 
 	// Set output writers
-	SetOutputWriters(authToken)
-	SetupBanyanStatus(authToken)
+	SetOutputWriters(&tokenSync)
+	SetupBanyanStatus(&tokenSync)
 
 	checkConfigUpdate(true)
 	if collector.LocalHost == false && collector.RegistryAPIURL == "" {
@@ -485,5 +487,5 @@ func main() {
 	blog.Debug(processedImages)
 
 	// Main infinite loop.
-	InfLoop(authToken, processedImages)
+	InfLoop(&tokenSync, processedImages)
 }

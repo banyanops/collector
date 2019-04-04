@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	collector "github.com/banyanops/collector"
+	auth "github.com/banyanops/collector/auth"
 	config "github.com/banyanops/collector/config"
 	except "github.com/banyanops/collector/except"
 	fsutil "github.com/banyanops/collector/fsutil"
@@ -19,7 +20,7 @@ func init() {
 	config.BanyanUpdate = func(status ...string) {}
 }
 
-func initMetadataSet(authToken string, metadataSet collector.MetadataSet) {
+func initMetadataSet(tokenSync *auth.TokenSyncInfo, metadataSet collector.MetadataSet) {
 	return
 }
 
@@ -103,7 +104,7 @@ func printExampleUsage() {
 	fmt.Fprintf(os.Stderr, "  \t\tbanyanops/collector "+config.DockerHub+" banyanops/nginx\n\n")
 }
 
-func SetOutputWriters(authToken string) {
+func SetOutputWriters(tokenSync *auth.TokenSyncInfo) {
 	dests := strings.Split(*config.Dests, ",")
 	for _, dest := range dests {
 		var writer collector.Writer
@@ -119,15 +120,10 @@ func SetOutputWriters(authToken string) {
 	}
 }
 
-func RegisterCollector() (token string) {
-	token = ""
+func RegisterCollector(tokenSync *auth.TokenSyncInfo) {
+	tokenSync.UpdateToken("")
 	return
 }
 
-func refreshToken(currToken string) (newToken string) {
-	newToken = currToken
-	return
-}
-
-func SetupBanyanStatus(authToken string) {
+func SetupBanyanStatus(tokenSync *auth.TokenSyncInfo) {
 }
