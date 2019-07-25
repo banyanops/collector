@@ -4,21 +4,30 @@ import "sync"
 
 type TokenSyncInfo struct {
 	sync.RWMutex
-	Token       string
-	Application string
+	Token        string
+	Application  string
+	RefreshToken string
 }
 
 func (ts *TokenSyncInfo) UpdateToken(token string) {
 	ts.Lock()
+	defer ts.Unlock()
+
 	ts.Token = token
-	ts.Unlock()
 }
 
 func (ts *TokenSyncInfo) GetToken() (token string) {
 	ts.RLock()
-	token = ts.Token
-	ts.RUnlock()
-	return
+	defer ts.RUnlock()
+
+	return ts.Token
+}
+
+func (ts *TokenSyncInfo) GetRefreshToken() (token string) {
+	ts.RLock()
+	defer ts.RUnlock()
+
+	return ts.RefreshToken
 }
 
 func (ts *TokenSyncInfo) SetApplication(application string) {
@@ -30,6 +39,5 @@ func (ts *TokenSyncInfo) UpdateTokenLocked(token string) {
 }
 
 func (ts *TokenSyncInfo) GetTokenLocked() (token string) {
-	token = ts.Token
-	return
+	return ts.Token
 }
