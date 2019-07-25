@@ -3,10 +3,11 @@ package auth
 import "sync"
 
 type TokenSyncInfo struct {
-	sync.RWMutex
+	sync.RWMutex // mutex protects Token only, all other fields are written on initialization only
 	Token        string
 	Application  string
 	RefreshToken string
+	ServerURL    string
 }
 
 func (ts *TokenSyncInfo) UpdateToken(token string) {
@@ -21,13 +22,6 @@ func (ts *TokenSyncInfo) GetToken() (token string) {
 	defer ts.RUnlock()
 
 	return ts.Token
-}
-
-func (ts *TokenSyncInfo) GetRefreshToken() (token string) {
-	ts.RLock()
-	defer ts.RUnlock()
-
-	return ts.RefreshToken
 }
 
 func (ts *TokenSyncInfo) SetApplication(application string) {
