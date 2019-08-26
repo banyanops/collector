@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"bitbucket.org/banyanops/collectorpro/banyan"
 	collector "github.com/banyanops/collector"
 	auth "github.com/banyanops/collector/auth"
 	config "github.com/banyanops/collector/config"
@@ -456,6 +457,7 @@ func main() {
 
 	var tokenSync auth.TokenSyncInfo
 	tokenSync.SetApplication("collector")
+	tokenSync.ObtainNewToken = banyan.GetNewToken
 	RegisterCollector(&tokenSync)
 
 	// Set output writers
